@@ -1,33 +1,48 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { getProductImageSet } from '../../data/imageCatalog';
+import heroImages from '../../data/heroImages.json';
 import { useStorefrontContent } from '../../hooks/useStorefrontContent';
-
-const HERO_IMAGE = getProductImageSet('sb53-red-and-gold-cotton-suit-with-dark-gold-print-sequence-work-neck-patch-amp-red-designer-dupatta').primaryImage;
 
 export default function HeroBanner() {
   const { content: copy } = useStorefrontContent('home_copy');
 
   return (
-    <section className="relative isolate min-h-[620px] overflow-hidden bg-[#65584e] md:min-h-[700px] lg:min-h-[calc(100vh-164px)]">
-      <img src={HERO_IMAGE} alt="" aria-hidden="true" className="absolute inset-0 -z-20 h-full w-full object-cover object-center" />
-      <div className="absolute inset-0 -z-10 bg-[#211a17]/55" />
+    <section className="overflow-hidden bg-[#fff7dc]">
+      <div className="mx-auto flex h-[min(47.5vw,912px)] min-h-[440px] max-h-[912px] max-w-[1920px] items-end gap-1.5 px-[5.5%] pt-5 sm:gap-2 md:gap-3 lg:gap-4">
+        {heroImages.map((image, index) => {
+          const isSideImage = index === 0 || index === heroImages.length - 1;
+          const isCenterImage = index === 2;
 
-      <div className="absolute inset-4 border border-[#d6b767]/70 md:inset-10" />
-      <div className="mx-auto flex min-h-[620px] max-w-5xl flex-col items-center justify-center px-8 py-20 text-center text-white md:min-h-[700px] md:px-16 lg:min-h-[calc(100vh-164px)]">
-        <p className="mb-6 text-xs font-bold uppercase tracking-[0.22em] text-[#e1bd65] sm:text-sm">
+          return (
+            <div
+              key={image}
+              className={`relative min-w-0 flex-1 overflow-hidden border-[3px] border-[#b88837] bg-[#eee7d9] sm:border-4 lg:border-[6px] ${
+                index === 1 || index === 3 ? 'hidden md:block' : ''
+              } ${isSideImage ? 'h-[76%]' : isCenterImage ? 'h-full' : 'h-[88%]'}`}
+              style={{ borderRadius: '50% 50% 0 0' }}
+            >
+              <img
+                src={image}
+                alt="Sasta Bazaar festive collection"
+                loading={index < 2 ? 'eager' : 'lazy'}
+                className="h-full w-full object-cover object-top"
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mx-auto max-w-5xl px-5 py-12 text-center sm:px-8 sm:py-16">
+        <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.22em] text-[#9b702b] sm:text-sm">
           {copy?.hero?.eyebrow}
         </p>
-
-        <h1 className="max-w-4xl font-serif text-4xl font-normal leading-[1.12] tracking-normal text-white sm:text-6xl lg:text-7xl">
+        <h1 className="font-serif text-3xl font-normal leading-tight text-[#26221c] sm:text-5xl lg:text-6xl">
           {copy?.hero?.title}
         </h1>
-
-        <p className="mt-7 max-w-3xl text-sm leading-7 text-white/90 sm:text-lg sm:leading-8">
+        <p className="mx-auto mt-5 max-w-3xl text-sm leading-7 text-[#575148] sm:text-lg sm:leading-8">
           {copy?.hero?.description}
         </p>
-
-        <div className="mt-10 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row sm:gap-5">
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:gap-5">
           <Link
             to="/shop"
             className="inline-flex min-h-14 items-center justify-center bg-[#a4ed00] px-9 text-sm font-bold uppercase tracking-wider text-[#17200b] transition-colors hover:bg-[#b5ff16]"
@@ -36,7 +51,7 @@ export default function HeroBanner() {
           </Link>
           <Link
             to="/collection/lehenga-choli"
-            className="inline-flex min-h-14 items-center justify-center border border-white/90 bg-black/10 px-9 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-white hover:text-[#211a17]"
+            className="inline-flex min-h-14 items-center justify-center border border-[#6f5c3d] px-9 text-sm font-bold uppercase tracking-wider text-[#302719] transition-colors hover:bg-[#302719] hover:text-white"
           >
             {copy?.hero?.secondaryCta}
           </Link>

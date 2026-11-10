@@ -36,10 +36,17 @@ if (sslEnabled) {
   ssl = { ca, rejectUnauthorized: true };
 }
 
-export const pool = new Pool({
+const poolOptions = {
   connectionString: process.env.DATABASE_URL,
-  ssl
-});
+  ssl,
+  // Vercel may run multiple instances; keep each instance to one DB client.
+  max: Math.max(1, Number.parseInt(process.env.PG_POOL_MAX || '1', 10)),
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 10_000
+};
+
+export const pool = globalThis.__sastaBazaarPgPool || new Pool(poolOptions);
+globalThis.__sastaBazaarPgPool = pool;
 
 export const query = (text, values) => pool.query(text, values);
 

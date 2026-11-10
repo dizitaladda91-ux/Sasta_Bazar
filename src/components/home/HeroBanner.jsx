@@ -39,7 +39,7 @@ export default function HeroBanner() {
                 to="/collection/casual-wear"
                 className="w-full sm:w-auto bg-white hover:bg-sasta-yellow-cream text-sasta-heading border border-sasta-border font-semibold text-xs sm:text-sm uppercase tracking-wider px-7 py-3.5 rounded-md shadow-xs transition-colors text-center"
               >
-                Explore Suits from Â£9.99
+                Explore Suits from £9.99
               </Link>
             </div>
 

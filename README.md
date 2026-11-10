@@ -42,6 +42,9 @@ Create a project in Supabase. In the Supabase dashboard, open **Connect** and co
 the **Session pooler** connection string (port `5432`). Copy `.env.example` to
 `.env`, then replace `<project-ref>`, `<region>`, and `<database-password>` in
 `DATABASE_URL` with the values from your project. Keep `DATABASE_SSL=true`.
+Download the project's root CA certificate from **Database Settings → SSL Configuration**
+and set `DATABASE_SSL_CA` to its local path (for example, `./supabase-ca.crt`).
+The certificate must match the Supabase project used by `DATABASE_URL`.
 If your database password contains URL-reserved characters, URL-encode it first.
 
 The backend connects to Supabase's PostgreSQL database using the `pg` driver;

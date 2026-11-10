@@ -209,11 +209,6 @@ export default function Footer() {
                   My Wishlist
                 </Link>
               </li>
-              <li>
-                <Link to="/admin" className="hover:text-sasta-gold-dark transition-colors text-sasta-gold-dark font-medium">
-                  Store Admin &rarr;
-                </Link>
-              </li>
             </ul>
             <div className="pt-2 text-xs text-sasta-body">
               <span className="font-semibold block text-sasta-heading">Store Enquiries:</span>

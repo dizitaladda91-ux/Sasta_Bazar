@@ -574,9 +574,13 @@ app.use((error, _req, res, _next) => {
   res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'Internal server error' });
 });
 
-pool.query('SELECT 1').then(() => {
-  app.listen(PORT, () => console.log(`Sasta Bazaar API listening on http://localhost:${PORT}`));
-}).catch((error) => {
-  console.error('Unable to connect to PostgreSQL:', error);
-  process.exitCode = 1;
-});
+export default app;
+
+if (!process.env.VERCEL) {
+  pool.query('SELECT 1').then(() => {
+    app.listen(PORT, () => console.log(`Sasta Bazaar API listening on http://localhost:${PORT}`));
+  }).catch((error) => {
+    console.error('Unable to connect to PostgreSQL:', error);
+    process.exitCode = 1;
+  });
+}

@@ -11,22 +11,29 @@ if (!process.env.DATABASE_URL) {
 
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 const sslCaPath = process.env.DATABASE_SSL_CA;
+const sslCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
 
-if (sslEnabled && !sslCaPath) {
-  throw new Error('DATABASE_SSL_CA must point to the Supabase root CA certificate when DATABASE_SSL=true. Download it from Supabase Dashboard → Database Settings → SSL Configuration.');
+if (sslEnabled && !sslCaPath && !sslCaBase64) {
+  throw new Error('Set DATABASE_SSL_CA to a local Supabase root CA certificate path or DATABASE_SSL_CA_BASE64 to its base64 contents when DATABASE_SSL=true.');
 }
 
 let ssl;
 if (sslEnabled) {
-  const absoluteCaPath = resolve(process.cwd(), sslCaPath);
-  try {
-    ssl = {
-      ca: readFileSync(absoluteCaPath, 'utf8'),
-      rejectUnauthorized: true
-    };
-  } catch (error) {
-    throw new Error(`Could not read DATABASE_SSL_CA at ${absoluteCaPath}: ${error.message}`);
+  let ca;
+  if (sslCaBase64) {
+    ca = Buffer.from(sslCaBase64, 'base64').toString('utf8');
+    if (!ca.includes('BEGIN CERTIFICATE')) {
+      throw new Error('DATABASE_SSL_CA_BASE64 does not contain a valid PEM certificate.');
+    }
+  } else {
+    const absoluteCaPath = resolve(process.cwd(), sslCaPath);
+    try {
+      ca = readFileSync(absoluteCaPath, 'utf8');
+    } catch (error) {
+      throw new Error(`Could not read DATABASE_SSL_CA at ${absoluteCaPath}: ${error.message}`);
+    }
   }
+  ssl = { ca, rejectUnauthorized: true };
 }
 
 export const pool = new Pool({

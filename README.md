@@ -45,6 +45,11 @@ the **Session pooler** connection string (port `5432`). Copy `.env.example` to
 Download the project's root CA certificate from **Database Settings → SSL Configuration**
 and set `DATABASE_SSL_CA` to its local path (for example, `./supabase-ca.crt`).
 The certificate must match the Supabase project used by `DATABASE_URL`.
+
+Vercel also deploys the Express API from `api/[...path].js` as a Function under `/api/*`.
+Set `DATABASE_URL`, `DATABASE_SSL=true`, and `DATABASE_SSL_CA_BASE64` in the Vercel
+project environment. `DATABASE_SSL_CA_BASE64` is the base64-encoded contents of the
+Supabase root certificate. The production frontend uses the same-origin `/api` path.
 If your database password contains URL-reserved characters, URL-encode it first.
 
 The backend connects to Supabase's PostgreSQL database using the `pg` driver;

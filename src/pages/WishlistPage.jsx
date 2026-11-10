@@ -4,16 +4,17 @@ import { Heart, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/common/ProductCard';
-import productsData from '../data/products.json';
+import { useProducts } from '../hooks/useProducts';
 
 export default function WishlistPage() {
   const { wishlistItems, removeFromWishlist } = useWishlist();
   const { addToCart } = useCart();
+  const { products } = useProducts();
 
   // Find full product details for each wishlist item
   const fullProducts = wishlistItems.map(wItem => {
-    return productsData.find(p => p.id === wItem.id) || wItem;
-  });
+    return products.find(p => p.id === wItem.id);
+  }).filter(Boolean);
 
   return (
     <div className="bg-white min-h-screen py-10 sm:py-16">

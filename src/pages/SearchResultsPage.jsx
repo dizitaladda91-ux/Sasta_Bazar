@@ -1,8 +1,8 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, ArrowLeft } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
-import productsData from '../data/products.json';
+import { useProducts } from '../hooks/useProducts';
 
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
@@ -13,17 +13,7 @@ export default function SearchResultsPage() {
     window.scrollTo(0, 0);
   }, [query]);
 
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return productsData.filter(p =>
-      p.title.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q) ||
-      p.subcategory.toLowerCase().includes(q) ||
-      p.handle.toLowerCase().includes(q) ||
-      p.description.toLowerCase().includes(q)
-    );
-  }, [query]);
+  const { products: results } = useProducts({ search: query, enabled: Boolean(query.trim()) });
 
   return (
     <div className="bg-white min-h-screen py-10 sm:py-16">

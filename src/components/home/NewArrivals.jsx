@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import SectionTitle from '../common/SectionTitle';
 import ProductCard from '../common/ProductCard';
-import productsData from '../../data/products.json';
+import { useProducts } from '../../hooks/useProducts';
+import { useStorefrontContent } from '../../hooks/useStorefrontContent';
 
 export default function NewArrivals() {
   const [activeTab, setActiveTab] = useState('all');
+  const { products } = useProducts({ filter: 'new' });
+  const { content: copy } = useStorefrontContent('home_copy');
 
   const tabs = [
     { id: 'all', label: 'All New Arrivals' },
@@ -14,7 +17,7 @@ export default function NewArrivals() {
   ];
 
   const filteredProducts = useMemo(() => {
-    let list = productsData.filter(p => p.isNewArrival);
+    let list = products;
     if (activeTab === 'suits') {
       list = list.filter(p => p.subcategory.includes('Suits') || p.subcategory.includes('Salwar'));
     } else if (activeTab === 'dresses') {
@@ -23,15 +26,15 @@ export default function NewArrivals() {
       list = list.filter(p => p.category === 'Scarves');
     }
     return list.slice(0, 8);
-  }, [activeTab]);
+  }, [activeTab, products]);
 
   return (
     <section className="py-12 sm:py-16 bg-sasta-yellow-cream/50 border-y border-sasta-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionTitle
-          eyebrow="Just Landed"
-          title="New Arrivals"
-          subtitle="Explore the latest additions to our ethnic wardrobe, designed for modern silhouettes and everyday luxury."
+          eyebrow={copy?.newArrivals?.eyebrow}
+          title={copy?.newArrivals?.title}
+          subtitle={copy?.newArrivals?.description}
           linkText="View All New"
           linkTo="/shop?filter=new"
           center={true}

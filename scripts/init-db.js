@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcrypt';
 import { inTransaction, pool, query } from '../server/db.js';
+import { CATEGORIES, SIGNATURE_COLLECTIONS } from '../src/data/categories.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readJson = async (relativePath, fallback = []) => {
@@ -21,6 +22,48 @@ const schema = await fs.readFile(path.join(root, 'server', 'db', 'schema.sql'), 
 try {
   await query(schema);
   await inTransaction(async (client) => {
+    const contentRows = [
+      ['home_categories', CATEGORIES],
+      ['signature_collections', SIGNATURE_COLLECTIONS],
+      ['collection_pages', Object.fromEntries([
+        ...CATEGORIES.map((item) => [item.slug, { title: item.name, description: item.description }]),
+        ['casual-wear', { title: 'Casual Everyday Wear Suits', description: 'Breezy cotton and slub 3-piece suit sets tailored with intricate neck patches and lightweight dupattas.' }],
+        ['lehenga-choli', { title: 'Lehenga Choli', description: 'Exquisite digital print and embroidered silk lehengas crafted for weddings and festive celebrations.' }],
+        ['sharara-gharara-suits', { title: 'Sharara & Gharara Suits', description: 'Glamorous tiered sharara silhouettes embellished with sequin work and contrast dupattas.' }],
+        ['salwar-kameez-suit-sets', { title: 'Salwar Kameez / Suit Sets', description: 'Classic thread & zarkan work suits made from premium slub cotton fabrics for comfortable elegance.' }],
+        ['dresses', { title: 'Dresses & Saree-Drape Gowns', description: 'Contemporary georgette drape styled dresses with hand-embroidered belts and modern cuts.' }],
+        ['kids-collection', { title: 'Kids Ethnic Collection', description: 'Comfortable, charming festive wear and lehenga choli sets designed specially for kids.' }],
+        ['unstitched-suits', { title: 'Unstitched Suits', description: 'Premium unstitched dress material in pure cotton and silk with designer dupattas ready to tailor.' }],
+        ['scarves', { title: 'Premium Jersey Hijabs & Scarves', description: 'Ultra-soft, breathable double-stitched jersey hijabs available in over 30 beautiful pastel and earthy tones.' }]
+      ])],
+      ['home_copy', {
+        hero: {
+          eyebrow: 'SPECIAL OFFERS • UP TO 50% OFF',
+          title: 'Everyday Luxury Ethnic Fashion',
+          description: 'Enjoy up to 50% off with our best price guarantee. Discover timeless suits, festive lehengas, breathable cotton kurtas, and double-stitched jersey hijabs tailored for graceful comfort.',
+          primaryCta: 'Shop Now',
+          secondaryCta: 'Explore Suits'
+        },
+        categories: {
+          eyebrow: 'Curated Categories',
+          title: 'Shop By Collection',
+          description: 'Handpicked ethnic elegance tailored with fine embroidery, soft cotton blends, and modern cuts.'
+        },
+        newArrivals: {
+          eyebrow: 'Just Landed',
+          title: 'New Arrivals',
+          description: 'Explore the latest additions to our ethnic wardrobe, designed for modern silhouettes and everyday luxury.'
+        }
+      }]
+    ];
+    for (const [contentKey, content] of contentRows) {
+      await client.query(
+        `INSERT INTO storefront_content (content_key, content) VALUES ($1, $2::jsonb)
+         ON CONFLICT (content_key) DO NOTHING`,
+        [contentKey, JSON.stringify(content)]
+      );
+    }
+
     await client.query(`
       INSERT INTO coupons (code, discount_type, discount_value, is_active)
       VALUES ('WELCOME10', 'percent', 10, TRUE)
@@ -81,14 +124,14 @@ try {
         await client.query(
           `INSERT INTO variants
             (external_id, product_id, title, size, color, stock, is_available, price, compare_at_price, image_url)
-           VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            ON CONFLICT (external_id) DO UPDATE SET
              product_id = EXCLUDED.product_id, title = EXCLUDED.title, size = EXCLUDED.size,
-             color = EXCLUDED.color, is_available = EXCLUDED.is_available, price = EXCLUDED.price,
+             color = EXCLUDED.color, stock = EXCLUDED.stock, is_available = EXCLUDED.is_available, price = EXCLUDED.price,
              compare_at_price = EXCLUDED.compare_at_price, image_url = EXCLUDED.image_url`,
           [
             variant.id == null ? null : String(variant.id), productId, title,
-            isSize ? title : null, isColor ? title : null, Boolean(variant.available),
+            isSize ? title : null, isColor ? title : null, Number(variant.stock) || 0, Boolean(variant.available),
             variant.price ?? product.price ?? 0, variant.compareAtPrice || null, variant.image || null
           ]
         );

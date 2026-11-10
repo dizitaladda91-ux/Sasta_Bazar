@@ -55,6 +55,9 @@ export function CartProvider({ children }) {
           {
             itemKey,
             id: product.id,
+            variantId: product.variants?.find((variant) =>
+              (!defaultSize || variant.size === defaultSize) && (!defaultColor || variant.color === defaultColor)
+            )?.id,
             handle: product.handle,
             title: product.title,
             price: product.price,

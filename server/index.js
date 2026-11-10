@@ -56,7 +56,8 @@ async function getProducts(where = '', values = [], orderBy = '') {
       compareAtPrice: row.compare_at_price == null ? null : Number(row.compare_at_price),
       discountPercent: row.discount_percent,
       currency: '£',
-      available: productVariants.some((variant) => variant.available),
+      stock: row.stock,
+      available: row.stock > 0,
       images: row.images,
       primaryImage: row.primary_image,
       hoverImage: row.hover_image,
@@ -154,11 +155,11 @@ async function createProduct(client, input) {
   const handle = input.handle || `${slugify(input.title)}-${Date.now()}`;
   const result = await client.query(
     `INSERT INTO products
-      (category_id, handle, title, raw_title, subcategory, collection_slug, description, price,
+      (category_id, handle, title, raw_title, subcategory, collection_slug, description, price, stock,
        compare_at_price, discount_percent, images, sizes, colors, primary_image, hover_image, is_new_arrival)
-     VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE) RETURNING id`,
+     VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,TRUE) RETURNING id`,
     [categoryId, handle, input.title, subcategory, parentSlug, input.description || '',
-      price, compareAtPrice, discount, images, sizes, colors, images[0], images[1] || images[0]]
+      price, Number(input.stock) || 0, compareAtPrice, discount, images, sizes, colors, images[0], images[1] || images[0]]
   );
   const productId = result.rows[0].id;
   const incomingVariants = Array.isArray(input.variants) && input.variants.length
@@ -173,7 +174,7 @@ async function createProduct(client, input) {
       `INSERT INTO variants (product_id, title, size, color, stock, price, compare_at_price, image_url)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [productId, variant.title || variant.size || variant.color || '', variant.size || null,
-        variant.color || null, Number(variant.stock) || 0, Number(variant.price ?? price),
+        variant.color || null, Number(variant.stock ?? input.stock) || 0, Number(variant.price ?? price),
         variant.compareAtPrice ? Number(variant.compareAtPrice) : compareAtPrice, variant.image || null]
     );
   }
@@ -191,6 +192,7 @@ app.get('/api/products', route(async (req, res) => {
   if (search) addFilter(`(p.title ILIKE '%' || ? || '%' OR p.handle ILIKE '%' || ? || '%' OR c.name ILIKE '%' || ? || '%')`, search);
   if (category && category !== 'All') addFilter(`(c.name = ? OR parent.name = ?)`, category);
   if (subcategory) addFilter(`c.name = ?`, subcategory);
+  if (req.query.collection) addFilter(`p.collection_slug = ?`, req.query.collection);
   if (filter === 'sale') filters.push('p.discount_percent > 0');
   if (filter === 'new') filters.push('p.is_new_arrival = TRUE');
   if (filter === 'best-seller') filters.push('p.is_best_seller = TRUE');
@@ -216,14 +218,21 @@ app.get('/api/products/:handle', route(async (req, res) => {
 
 app.get('/api/categories', route(async (_req, res) => {
   const { rows } = await query(`
-    SELECT parent.name, COUNT(DISTINCT p.id)::int AS count,
+    SELECT parent.name, parent.slug, parent.description, parent.image_url,
+           COUNT(DISTINCT p.id)::int AS count,
            COALESCE(array_agg(DISTINCT child.name) FILTER (WHERE child.name IS NOT NULL), '{}') AS subcategories
     FROM categories parent
     LEFT JOIN categories child ON child.parent_id = parent.id
     LEFT JOIN products p ON p.category_id = child.id AND p.is_active = TRUE
     WHERE parent.parent_id IS NULL GROUP BY parent.id ORDER BY parent.sort_order, parent.name
   `);
-  res.json({ success: true, categories: rows.map(({ name, count, subcategories }) => ({ name, count, subcategories })) });
+  res.json({ success: true, categories: rows.map(({ name, slug, description, image_url, count, subcategories }) => ({ name, slug, description, image: image_url, count, subcategories })) });
+}));
+
+app.get('/api/storefront/content/:key', route(async (req, res) => {
+  const { rows } = await query('SELECT content FROM storefront_content WHERE content_key = $1', [req.params.key]);
+  if (!rows.length) return res.status(404).json({ success: false, message: 'Store content was not found.' });
+  res.json({ success: true, content: rows[0].content });
 }));
 
 app.post('/api/orders', route(async (req, res) => {
@@ -232,12 +241,39 @@ app.post('/api/orders', route(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing required customer details (name, email, address)' });
   }
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ success: false, message: 'Cannot place an empty order' });
-  const subtotal = money(items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0));
-  const discount = promoCode?.toUpperCase() === 'WELCOME10' ? money(subtotal * 0.1) : 0;
-  const shipping = subtotal >= 40 || shippingMethod === 'free' ? 0 : 3.99;
-  const total = Math.max(0, money(subtotal - discount + shipping));
   const orderRef = `SB-${Math.floor(100000 + Math.random() * 900000)}`;
   await inTransaction(async (client) => {
+    const resolvedItems = [];
+    for (const item of items) {
+      const quantity = Number(item.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) throw Object.assign(new Error('Invalid item quantity.'), { status: 400 });
+      const productResult = await client.query(
+      `SELECT id, title, primary_image, price, stock, is_active FROM products
+         WHERE external_id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+        [String(item.productId ?? item.id ?? '')]
+      );
+      if (!productResult.rowCount || !productResult.rows[0].is_active) throw Object.assign(new Error('A product in your bag is unavailable.'), { status: 409 });
+      const product = productResult.rows[0];
+      const variantResult = item.variantId == null
+        ? await client.query(
+            `SELECT * FROM variants WHERE product_id=$1 AND COALESCE(size,'')=$2 AND COALESCE(color,'')=$3 FOR UPDATE`,
+            [product.id, item.size || '', item.color || '']
+          )
+        : await client.query(
+            `SELECT * FROM variants WHERE product_id=$1 AND (external_id=$2 OR id::text=$2) FOR UPDATE`,
+            [product.id, String(item.variantId)]
+          );
+      if (!variantResult.rowCount) throw Object.assign(new Error('A selected product option is no longer available.'), { status: 409 });
+      const variant = variantResult.rows[0];
+      if (!variant.is_available || product.stock < quantity) throw Object.assign(new Error(`${product.title} does not have enough stock for that quantity.`), { status: 409 });
+      const unitPrice = Number(variant.price);
+      resolvedItems.push({ item, product, variant, quantity, unitPrice });
+      await client.query('UPDATE products SET stock=stock-$2, updated_at=NOW() WHERE id=$1', [product.id, quantity]);
+    }
+    const subtotal = money(resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0));
+    const discount = promoCode?.toUpperCase() === 'WELCOME10' ? money(subtotal * 0.1) : 0;
+    const shipping = subtotal >= 40 || shippingMethod === 'free' ? 0 : 3.99;
+    const total = Math.max(0, money(subtotal - discount + shipping));
     const user = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [customer.email]);
     const inserted = await client.query(
       `INSERT INTO orders
@@ -249,47 +285,14 @@ app.post('/api/orders', route(async (req, res) => {
         customer.address, customer.city || '', customer.postcode || '', subtotal, shipping, discount, total,
         paymentMethod || 'Online Card Payment', `RM${Math.floor(10000000 + Math.random() * 90000000)}GB`]
     );
-    for (const item of items) {
-      const product = await client.query(
-        'SELECT id FROM products WHERE external_id = $1 OR id::text = $1 LIMIT 1',
-        [String(item.productId ?? item.id ?? '')]
-      );
-      let variant = item.variantId == null
-        ? { rows: [] }
-        : await client.query(
-          'SELECT id, product_id FROM variants WHERE external_id = $1 OR id::text = $1 LIMIT 1',
-          [String(item.variantId)]
-        );
-      if (!variant.rowCount && product.rowCount && (item.size || item.color)) {
-        variant = await client.query(
-          `SELECT id,product_id FROM variants WHERE product_id=$1
-           ORDER BY CASE
-             WHEN ($2='' OR size=$2) AND ($3='' OR color=$3) THEN 0
-             WHEN $3<>'' AND color=$3 THEN 1
-             WHEN $2<>'' AND size=$2 THEN 2
-             ELSE 3 END
-           LIMIT 1`,
-          [product.rows[0].id, item.size || '', item.color || '']
-        );
-        if (variant.rowCount) {
-          const variantMatches = await client.query(
-            `SELECT id FROM variants WHERE id=$1 AND
-              (($2='' OR size=$2 OR color=$3) OR ($3<>'' AND color=$3))`,
-            [variant.rows[0].id, item.size || '', item.color || '']
-          );
-          if (!variantMatches.rowCount) variant = { rows: [] };
-        }
-      }
-      const productId = variant.rows[0]?.product_id || product.rows[0]?.id || null;
-      const quantity = Math.max(1, Number(item.quantity) || 1);
-      const unitPrice = Number(item.price) || 0;
+    for (const { item, product, variant, quantity, unitPrice } of resolvedItems) {
       await client.query(
         `INSERT INTO order_items
           (order_id,product_id,variant_id,product_title,variant_title,size,color,image_url,unit_price,quantity,line_total)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [inserted.rows[0].id, productId, variant.rows[0]?.id || null,
-          item.title || '', item.variantTitle || item.size || item.color || '', item.size || '',
-          item.color || '', item.image || '', unitPrice, quantity, money(unitPrice * quantity)]
+        [inserted.rows[0].id, product.id, variant.id,
+          product.title, variant.title || item.size || item.color || '', variant.size || '',
+          variant.color || '', variant.image_url || product.primary_image, unitPrice, quantity, money(unitPrice * quantity)]
       );
     }
   });
@@ -515,15 +518,18 @@ app.put('/api/admin/products/:id', route(async (req, res) => {
         `${slugify(categoryName)}-${slugify(updated.subcategory || 'Uncategorized')}`]
     )).rows[0].id;
     await client.query(
-      `UPDATE products SET title=$2,raw_title=$3,description=$4,price=$5,compare_at_price=$6,
-        discount_percent=$7,images=$8,sizes=$9,colors=$10,primary_image=$11,hover_image=$12,is_best_seller=$13,
-        is_new_arrival=$14,category_id=$15,subcategory=$16,updated_at=NOW()
+      `UPDATE products SET title=$2,raw_title=$3,description=$4,price=$5,stock=$6,compare_at_price=$7,
+        discount_percent=$8,images=$9,sizes=$10,colors=$11,primary_image=$12,hover_image=$13,is_best_seller=$14,
+        is_new_arrival=$15,category_id=$16,subcategory=$17,updated_at=NOW()
        WHERE id=$1`,
       [productId, updated.title, updated.rawTitle || updated.title, updated.description || '',
-        price, compareAtPrice, discount, updated.images || [], updated.sizes || [], updated.colors || [],
+        price, Number(updated.stock) || 0, compareAtPrice, discount, updated.images || [], updated.sizes || [], updated.colors || [],
         updated.primaryImage || '', updated.hoverImage || '', Boolean(updated.isBestSeller),
         Boolean(updated.isNewArrival), categoryId, updated.subcategory || '']
     );
+    if (!Array.isArray(req.body.variants)) {
+      await client.query('UPDATE variants SET price=$2,compare_at_price=$3 WHERE product_id=$1', [productId, price, compareAtPrice]);
+    }
     if (Array.isArray(req.body.variants)) {
       await client.query('DELETE FROM variants WHERE product_id=$1', [productId]);
       for (const variant of req.body.variants) {
@@ -565,7 +571,7 @@ app.get('/api/admin/subscribers', route(async (_req, res) => {
 
 app.use((error, _req, res, _next) => {
   console.error('API request failed:', error);
-  res.status(500).json({ success: false, message: 'Internal server error' });
+  res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'Internal server error' });
 });
 
 pool.query('SELECT 1').then(() => {

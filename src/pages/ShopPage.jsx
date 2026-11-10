@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Filter, X, ChevronDown, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
-import productsData from '../data/products.json';
+import { useProducts } from '../hooks/useProducts';
 
 export default function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,6 +14,7 @@ export default function ShopPage() {
   const [priceRange, setPriceRange] = useState(100);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'featured');
+  const { products: catalogProducts } = useProducts();
 
   const filterParam = searchParams.get('filter'); // 'new' or 'sale'
 
@@ -43,7 +44,7 @@ export default function ShopPage() {
 
   // Filter and Sort Logic
   const filteredProducts = useMemo(() => {
-    return productsData.filter(product => {
+    return catalogProducts.filter(product => {
       // Category filter
       if (selectedCategory !== 'All') {
         const matchesCategory =
@@ -85,7 +86,7 @@ export default function ShopPage() {
       if (sortBy === 'newest') return (b.isNewArrival ? 1 : 0) - (a.isNewArrival ? 1 : 0);
       return (b.isBestSeller ? 1 : 0) - (a.isBestSeller ? 1 : 0);
     });
-  }, [selectedCategory, selectedSize, priceRange, onlyAvailable, sortBy, filterParam]);
+  }, [catalogProducts, selectedCategory, selectedSize, priceRange, onlyAvailable, sortBy, filterParam]);
 
   const clearAllFilters = () => {
     setSelectedCategory('All');

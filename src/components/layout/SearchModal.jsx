@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight, Tag } from 'lucide-react';
-import productsData from '../../data/products.json';
+import { api } from '../../services/api';
 
 export default function SearchModal({ isOpen, onClose }) {
   const [query, setQuery] = useState('');
@@ -28,16 +28,12 @@ export default function SearchModal({ isOpen, onClose }) {
       setResults([]);
       return;
     }
-    const q = query.toLowerCase();
-    const filtered = productsData
-      .filter(p =>
-        p.title.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        p.subcategory.toLowerCase().includes(q) ||
-        p.handle.toLowerCase().includes(q)
-      )
-      .slice(0, 6);
-    setResults(filtered);
+    const timeout = setTimeout(() => {
+      api.getProducts({ search: query, limit: 6 })
+        .then(setResults)
+        .catch(() => setResults([]));
+    }, 200);
+    return () => clearTimeout(timeout);
   }, [query]);
 
   if (!isOpen) return null;

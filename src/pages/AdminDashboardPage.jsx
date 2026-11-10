@@ -15,21 +15,21 @@ import {
   Filter
 } from 'lucide-react';
 import { api } from '../services/api';
-import productsData from '../data/products.json';
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'products', 'subscribers'
   const [stats, setStats] = useState({
-    totalProducts: productsData.length,
-    totalOrders: 1,
-    totalSales: 23.97,
+    totalProducts: 0,
+    totalOrders: 0,
+    totalSales: 0,
     currency: '£',
-    pendingOrders: 1,
-    totalSubscribers: 1
+    pendingOrders: 0,
+    totalSubscribers: 0
   });
 
   const [orders, setOrders] = useState([]);
-  const [products, setProducts] = useState(productsData);
+  const [products, setProducts] = useState([]);
+  const [stockDrafts, setStockDrafts] = useState({});
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState('');
 
@@ -40,6 +40,7 @@ export default function AdminDashboardPage() {
     subcategory: 'Casual Everyday Wear Suits',
     price: '',
     compareAtPrice: '',
+    stock: '0',
     sizes: 'S, M, L, XL, XXL',
     images: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/1E1687CB-99B0-4DF8-B0A1-477F97E542DC.png?v=1782829448',
     description: ''
@@ -101,6 +102,7 @@ export default function AdminDashboardPage() {
         subcategory: 'Casual Everyday Wear Suits',
         price: '',
         compareAtPrice: '',
+        stock: '0',
         sizes: 'S, M, L, XL, XXL',
         images: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/1E1687CB-99B0-4DF8-B0A1-477F97E542DC.png?v=1782829448',
         description: ''
@@ -114,6 +116,16 @@ export default function AdminDashboardPage() {
       await api.deleteProduct(id);
       showToast('Product deleted');
       fetchAdminData();
+    }
+  };
+
+  const handleStockSave = async (product) => {
+    const stock = Number(stockDrafts[product.id] ?? product.stock);
+    if (!Number.isInteger(stock) || stock < 0) return showToast('Stock must be a whole number of zero or more.');
+    const result = await api.updateProduct(product.id, { stock });
+    if (result.success) {
+      setProducts((current) => current.map((item) => item.id === product.id ? result.product : item));
+      showToast('Stock quantity updated.');
     }
   };
 
@@ -335,6 +347,18 @@ export default function AdminDashboardPage() {
                         <span className="text-xs text-sasta-muted line-through">£{p.compareAtPrice.toFixed(2)}</span>
                       )}
                     </div>
+                    <label className="flex items-center gap-2 text-xs">
+                      <span>Stock</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={stockDrafts[p.id] ?? p.stock}
+                        onChange={(event) => setStockDrafts({ ...stockDrafts, [p.id]: event.target.value })}
+                        className="w-20 border border-sasta-border rounded px-2 py-1"
+                      />
+                      <button onClick={() => handleStockSave(p)} className="text-sasta-gold-dark font-semibold">Save</button>
+                    </label>
                   </div>
 
                   <div className="pt-3 border-t border-sasta-border/60 flex items-center justify-between text-xs mt-3">
@@ -405,6 +429,19 @@ export default function AdminDashboardPage() {
                       className="w-full border border-sasta-border rounded p-2 focus:border-sasta-gold outline-none"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Stock quantity *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    required
+                    value={newProduct.stock}
+                    onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                    className="w-full border border-sasta-border rounded p-2 focus:border-sasta-gold outline-none"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

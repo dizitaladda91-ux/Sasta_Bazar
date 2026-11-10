@@ -2,12 +2,12 @@ import React, { useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import SectionTitle from '../common/SectionTitle';
 import ProductCard from '../common/ProductCard';
-import productsData from '../../data/products.json';
+import { useProducts } from '../../hooks/useProducts';
 
 export default function BestSellersCarousel() {
   const scrollContainerRef = useRef(null);
 
-  const bestSellers = productsData.filter(p => p.isBestSeller).slice(0, 10);
+  const { products } = useProducts({ filter: 'best-seller', limit: 10 });
 
   const scroll = (direction) => {
     if (scrollContainerRef.current) {
@@ -61,7 +61,7 @@ export default function BestSellersCarousel() {
           className="flex gap-4 sm:gap-6 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {bestSellers.map((product) => (
+          {products.map((product) => (
             <div
               key={product.id}
               className="shrink-0 w-[240px] sm:w-[280px] snap-start"

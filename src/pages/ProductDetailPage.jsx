@@ -17,14 +17,25 @@ import {
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import ProductCard from '../components/common/ProductCard';
-import productsData from '../data/products.json';
+import { api } from '../services/api';
+import { useProducts } from '../hooks/useProducts';
 
 export default function ProductDetailPage() {
   const { handle } = useParams();
   const navigate = useNavigate();
 
-  const product = useMemo(() => {
-    return productsData.find(p => p.handle === handle) || productsData[0];
+  const [product, setProduct] = useState(null);
+  const [productError, setProductError] = useState('');
+  const { products: catalogProducts } = useProducts();
+
+  useEffect(() => {
+    let active = true;
+    setProduct(null);
+    setProductError('');
+    api.getProduct(handle)
+      .then((value) => active && setProduct(value))
+      .catch((error) => active && setProductError(error.message));
+    return () => { active = false; };
   }, [handle]);
 
   const [selectedImage, setSelectedImage] = useState(0);
@@ -36,12 +47,14 @@ export default function ProductDetailPage() {
   const { addToCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
 
-  const isFavorited = isInWishlist(product.id);
+  const isFavorited = product ? isInWishlist(product.id) : false;
+  const availableStock = product?.stock ?? 0;
 
   useEffect(() => {
     window.scrollTo(0, 0);
     setSelectedImage(0);
     setQuantity(1);
+    if (!product) return;
     if (product.sizes && product.sizes.length > 0) {
       setSelectedSize(product.sizes[0]);
     }
@@ -53,13 +66,14 @@ export default function ProductDetailPage() {
 
   // Related products from the same category
   const relatedProducts = useMemo(() => {
-    return productsData
+    if (!product) return [];
+    return catalogProducts
       .filter(p => p.id !== product.id && (p.category === product.category || p.subcategory === product.subcategory))
       .slice(0, 4);
-  }, [product]);
+  }, [product, catalogProducts]);
 
   const handleAddToCart = () => {
-    if (!product.available) return;
+    if (!product.available || quantity > availableStock) return;
     addToCart(product, selectedSize, selectedColor, quantity);
   };
 
@@ -75,6 +89,8 @@ export default function ProductDetailPage() {
       setTimeout(() => setCopiedLink(false), 2000);
     }
   };
+
+  if (!product) return <div className="min-h-[50vh] grid place-items-center text-sm text-sasta-muted">{productError || 'Loading product…'}</div>;
 
   const imagesList = product.images && product.images.length > 0
     ? product.images
@@ -267,7 +283,8 @@ export default function ProductDetailPage() {
                     {quantity}
                   </span>
                   <button
-                    onClick={() => setQuantity(quantity + 1)}
+                    onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
+                    disabled={quantity >= availableStock}
                     className="p-2.5 hover:bg-neutral-100 text-sasta-heading transition-colors"
                     aria-label="Increase quantity"
                   >
@@ -278,7 +295,7 @@ export default function ProductDetailPage() {
                 {/* Add to Bag Button */}
                 <button
                   onClick={handleAddToCart}
-                  disabled={!product.available}
+                  disabled={!product.available || availableStock < 1}
                   className={`flex-1 py-3 px-6 rounded-md font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all ${
                     product.available
                       ? 'bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading cursor-pointer active:scale-[0.99]'

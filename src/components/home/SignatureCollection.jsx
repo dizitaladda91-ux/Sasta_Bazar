@@ -2,9 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import SectionTitle from '../common/SectionTitle';
-import { SIGNATURE_COLLECTIONS } from '../../data/categories';
+import { useStorefrontContent } from '../../hooks/useStorefrontContent';
 
 export default function SignatureCollection() {
+  const { content: collections } = useStorefrontContent('signature_collections');
   return (
     <section className="py-12 sm:py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -18,7 +19,7 @@ export default function SignatureCollection() {
         />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-          {SIGNATURE_COLLECTIONS.map((item) => (
+          {(collections || []).map((item) => (
             <Link
               key={item.id}
               to={item.link}

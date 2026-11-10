@@ -1,7 +1,7 @@
 import app from '../server/index.js';
 
 export default function handler(req, res) {
-  // Dynamic Vercel function routes can receive the path with or without /api.
+  // Keep Express route matching consistent if Vercel strips the function prefix.
   if (!req.url.startsWith('/api/')) {
     req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
   }

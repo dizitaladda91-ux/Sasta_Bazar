@@ -10,10 +10,10 @@
 ├── client (Frontend: React + Vite + Tailwind CSS + Lucide Icons)
 │   ├── Port: http://localhost:3000
 │   ├── Pages: Home, Shop, Collection, Product Details, Cart, Wishlist, Search, Track Order, Admin
-│   └── API Proxy: /api/* -> http://localhost:5000
+│   └── Next.js API route: /api/*
 │
 ├── server (Backend: Node.js + Express REST API)
-│   ├── Port: http://localhost:5000
+│   ├── Runtime: Next.js API route on the same origin
 │   ├── Storage: PostgreSQL (schema in server/db/schema.sql)
 │   │   ├── users, addresses
 │   │   ├── categories, products, variants
@@ -46,10 +46,12 @@ Download the project's root CA certificate from **Database Settings → SSL Conf
 and set `DATABASE_SSL_CA` to its local path (for example, `./supabase-ca.crt`).
 The certificate must match the Supabase project used by `DATABASE_URL`.
 
-Vercel also deploys the Express API from `api/[...path].js` as a Function under `/api/*`.
-Set `DATABASE_URL`, `DATABASE_SSL=true`, and `DATABASE_SSL_CA_BASE64` in the Vercel
-project environment. `DATABASE_SSL_CA_BASE64` is the base64-encoded contents of the
-Supabase root certificate. The production frontend uses the same-origin `/api` path.
+The storefront and Express API run together as a Next.js app. `pages/api/[[...path]].js`
+forwards `/api/*` requests to the existing Express routes. Set `DATABASE_URL`,
+`DATABASE_SSL=true`, and `DATABASE_SSL_CA_BASE64` in the Vercel project environment.
+`DATABASE_SSL_CA_BASE64` is the base64-encoded contents of the Supabase root certificate.
+The frontend uses the same-origin `/api` path. Public storefront settings use `NEXT_PUBLIC_`
+variables; database credentials must stay server-only without that prefix.
 If your database password contains URL-reserved characters, URL-encode it first.
 
 The backend connects to Supabase's PostgreSQL database using the `pg` driver;
@@ -70,14 +72,14 @@ stock counts; existing availability flags are retained separately.
 
 From the project directory, run:
 ```powershell
-# Starts BOTH Backend Server (Port 5000) and Frontend (Port 3000) concurrently:
+# Starts the Next.js storefront and API together:
 npm run dev
 ```
 
 - **Frontend Storefront:** [http://localhost:3000](http://localhost:3000)
 - **Store Admin Dashboard:** [http://localhost:3000/admin](http://localhost:3000/admin)
 - **Order Tracking:** [http://localhost:3000/track-order](http://localhost:3000/track-order)
-- **Backend API:** [http://localhost:5000/api/products](http://localhost:5000/api/products)
+- **Backend API:** [http://localhost:3000/api/products](http://localhost:3000/api/products)
 
 ---
 

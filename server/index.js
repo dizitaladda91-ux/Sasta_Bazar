@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
@@ -576,7 +578,9 @@ app.use((error, _req, res, _next) => {
 
 export default app;
 
-if (!process.env.VERCEL) {
+const isDirectExecution = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
   pool.query('SELECT 1').then(() => {
     app.listen(PORT, () => console.log(`Sasta Bazaar API listening on http://localhost:${PORT}`));
   }).catch((error) => {

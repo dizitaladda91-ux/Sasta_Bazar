@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import { CartProvider, useCart } from './context/CartContext';
 import { WishlistProvider, useWishlist } from './context/WishlistContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -54,37 +54,39 @@ function ToastAlert() {
 }
 
 function MainLayout() {
+  const router = useRouter();
+  const pathname = router.asPath.split(/[?#]/)[0].replace(/\/+$/, '') || '/';
+  const segments = pathname.split('/').filter(Boolean);
+  let page = <NotFoundPage />;
+
+  if (pathname === '/') page = <HomePage />;
+  else if (pathname === '/shop') page = <ShopPage />;
+  else if (segments[0] === 'collection' && segments[1]) page = <CollectionPage />;
+  else if (segments[0] === 'product' && segments[1]) page = <ProductDetailPage />;
+  else if (pathname === '/cart') page = <CartPage />;
+  else if (pathname === '/wishlist') page = <WishlistPage />;
+  else if (pathname === '/search') page = <SearchResultsPage />;
+  else if (pathname === '/about') page = <AboutPage />;
+  else if (pathname === '/contact') page = <ContactPage />;
+  else if (pathname === '/size-guide') page = <SizeGuidePage />;
+  else if (pathname === '/faqs') page = <FaqsPage />;
+  else if (pathname === '/customization') page = <CustomizationPage />;
+  else if (pathname === '/care-instructions') page = <CareInstructionsPage />;
+  else if (pathname === '/track-order') page = <TrackOrderPage />;
+  else if (pathname === '/admin') page = <AdminDashboardPage />;
+  else if (['/login', '/register', '/account'].includes(pathname)) page = <AuthPage />;
+  else if (pathname === '/privacy-policy') page = <PrivacyPolicyPage />;
+  else if (pathname === '/shipping-policy') page = <ShippingPolicyPage />;
+  else if (pathname === '/refund-policy') page = <RefundPolicyPage />;
+  else if (pathname === '/terms-of-service') page = <TermsPage />;
+  else if (pathname === '/cookie-policy') page = <CookiePolicyPage />;
+
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <AnnouncementBar />
       <Header />
       <main className="flex-1">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/shop" element={<ShopPage />} />
-          <Route path="/collection/:slug" element={<CollectionPage />} />
-          <Route path="/product/:handle" element={<ProductDetailPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/wishlist" element={<WishlistPage />} />
-          <Route path="/search" element={<SearchResultsPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/size-guide" element={<SizeGuidePage />} />
-          <Route path="/faqs" element={<FaqsPage />} />
-          <Route path="/customization" element={<CustomizationPage />} />
-          <Route path="/care-instructions" element={<CareInstructionsPage />} />
-          <Route path="/track-order" element={<TrackOrderPage />} />
-          <Route path="/admin" element={<AdminDashboardPage />} />
-          <Route path="/login" element={<AuthPage />} />
-          <Route path="/register" element={<AuthPage />} />
-          <Route path="/account" element={<AuthPage />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-          <Route path="/shipping-policy" element={<ShippingPolicyPage />} />
-          <Route path="/refund-policy" element={<RefundPolicyPage />} />
-          <Route path="/terms-of-service" element={<TermsPage />} />
-          <Route path="/cookie-policy" element={<CookiePolicyPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+        {page}
       </main>
       <Footer />
       <CartDrawer />
@@ -95,14 +97,12 @@ function MainLayout() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <CartProvider>
-          <WishlistProvider>
-            <MainLayout />
-          </WishlistProvider>
-        </CartProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <CartProvider>
+        <WishlistProvider>
+          <MainLayout />
+        </WishlistProvider>
+      </CartProvider>
+    </AuthProvider>
   );
 }

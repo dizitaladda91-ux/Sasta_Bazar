@@ -9,6 +9,10 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set before starting the API server.');
 }
 
+// .env values can be copied into Vercel with their surrounding quotes;
+// strip those wrappers before pg parses the connection URI.
+const connectionString = process.env.DATABASE_URL.trim().replace(/^['"]|['"]$/g, '');
+
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 const sslCaPath = process.env.DATABASE_SSL_CA;
 const sslCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
@@ -37,7 +41,7 @@ if (sslEnabled) {
 }
 
 const poolOptions = {
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ssl,
   // Vercel may run multiple instances; keep each instance to one DB client.
   max: Math.max(1, Number.parseInt(process.env.PG_POOL_MAX || '1', 10)),

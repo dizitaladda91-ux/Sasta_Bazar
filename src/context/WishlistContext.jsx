@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getProductImageSet } from '../data/imageCatalog';
 
 const WishlistContext = createContext();
 
@@ -8,7 +9,10 @@ export function WishlistProvider({ children }) {
   const [wishlistItems, setWishlistItems] = useState(() => {
     try {
       const saved = localStorage.getItem(WISHLIST_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved).map((item) => ({
+        ...item,
+        image: getProductImageSet(item.handle).primaryImage,
+      })) : [];
     } catch (e) {
       console.error('Failed to parse wishlist from localStorage', e);
       return [];

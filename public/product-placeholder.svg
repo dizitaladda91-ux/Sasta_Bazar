@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" fill="none">
+  <rect width="600" height="800" fill="#f4efe6"/>
+  <path d="M220 210 270 175h60l50 35 72 52-40 61-47-28v300H235V295l-47 28-40-61 72-52Z" fill="#e7ddca" stroke="#b6a98f" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m270 175 30 58 30-58M235 330h130M235 378h130" stroke="#b6a98f" stroke-width="7" stroke-linecap="round"/>
+  <text x="300" y="675" fill="#736b5c" font-family="system-ui,sans-serif" font-size="22" letter-spacing="4" text-anchor="middle">SASTA BAZAAR</text>
+</svg>

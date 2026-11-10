@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Menu, User, ChevronDown } from 'lucide-react';
+import { Heart, Menu, Search, ShoppingBag, User } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
@@ -8,297 +8,133 @@ import MegaMenu from './MegaMenu';
 import MobileNav from './MobileNav';
 import SearchModal from './SearchModal';
 
+const navigation = [
+  { label: 'Shop', to: '/shop' },
+  { label: 'Bridal Wear', to: '/collection/lehenga-choli' },
+  { label: 'Party Wear', to: '/collection/sharara-gharara-suits' },
+  { label: 'Signature Collection', to: '/shop?filter=best-seller' },
+  { label: 'Casual Collection', to: '/collection/casual-wear' },
+  { label: 'About Us', to: '/about' },
+  { label: 'Contact Us', to: '/contact' },
+];
+
 export default function Header() {
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [helpDropdownOpen, setHelpDropdownOpen] = useState(false);
-  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-
   const { totalCount, openCart } = useCart();
   const { wishlistCount } = useWishlist();
   const { user, isAuthenticated } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => setIsScrolled(window.scrollY > 12);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Close menus on route change
   useEffect(() => {
     setIsMegaMenuOpen(false);
     setIsMobileNavOpen(false);
     setIsSearchOpen(false);
-    setHelpDropdownOpen(false);
-    setCompanyDropdownOpen(false);
   }, [location.pathname]);
 
   return (
     <>
-      <header
-        className={`sticky top-0 z-40 bg-white transition-all duration-300 ${
-          isScrolled ? 'shadow-md border-b border-sasta-border/70' : 'border-b border-sasta-border'
-        }`}
-      >
-        {/* Top Header Bar: Logo & Actions */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 sm:py-4">
-          <div className="grid grid-cols-3 items-center">
-            {/* Left Column: Mobile Menu & Search */}
-            <div className="flex items-center gap-1 sm:gap-3">
-              <button
-                type="button"
-                onClick={() => setIsMobileNavOpen(true)}
-                className="lg:hidden p-2 text-sasta-heading hover:text-sasta-gold-dark hover:bg-sasta-yellow-cream rounded-full transition-colors"
-                aria-label="Open mobile navigation menu"
-              >
-                <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
+      <header className={`sticky top-0 z-40 bg-[#fcfaf7] transition-shadow duration-300 ${isScrolled ? 'shadow-md' : ''}`}>
+        <div className="mx-auto flex h-[82px] max-w-[1780px] items-center justify-between gap-3 px-4 sm:h-[96px] sm:px-7 lg:px-10">
+          <div className="flex shrink-0 items-center gap-1 lg:w-[150px]">
+            <button
+              type="button"
+              onClick={() => setIsMobileNavOpen(true)}
+              className="rounded-full p-2 text-sasta-heading transition-colors hover:bg-black/5 lg:hidden"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="rounded-full p-2 text-sasta-heading transition-colors hover:bg-black/5 lg:hidden"
+              aria-label="Search products"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            <Link to="/" className="hidden lg:block">
+              <img src="/logo.png" alt="Sasta Bazaar" className="h-[62px] w-auto max-w-[140px] object-contain" />
+            </Link>
+          </div>
 
-              <button
-                type="button"
-                onClick={() => setIsSearchOpen(true)}
-                className="p-2 text-sasta-heading hover:text-sasta-gold-dark hover:bg-sasta-yellow-cream rounded-full transition-colors flex items-center gap-1.5"
-                aria-label="Open search"
-              >
-                <Search className="w-5 h-5" />
-                <span className="hidden md:inline text-xs font-medium text-sasta-muted">
-                  Search
-                </span>
-              </button>
-            </div>
+          <Link to="/" className="absolute left-1/2 -translate-x-1/2 lg:hidden">
+            <img src="/logo.png" alt="Sasta Bazaar" className="h-[54px] w-auto max-w-[130px] object-contain" />
+          </Link>
 
-            {/* Center Column: Logo */}
-            <div className="text-center flex flex-col items-center justify-center">
-              <Link to="/" className="inline-block group py-0.5">
-                <img
-                  src="/logo.png"
-                  alt="SASTA BAZAAR - Everyday Luxury"
-                  className="h-12 sm:h-16 md:h-20 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
-                />
-              </Link>
-            </div>
+          <nav className="hidden min-w-0 flex-1 lg:block" aria-label="Main navigation">
+            <ul className="flex items-center justify-center gap-4 xl:gap-7 2xl:gap-9">
+              {navigation.map((item, index) => (
+                <li
+                  key={item.label}
+                  className="shrink-0"
+                  onMouseEnter={index === 0 ? () => setIsMegaMenuOpen(true) : undefined}
+                >
+                  <Link
+                    to={item.to}
+                    onFocus={index === 0 ? () => setIsMegaMenuOpen(true) : undefined}
+                    className="whitespace-nowrap py-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-[#34312e] transition-colors hover:text-[#8d6b36] xl:text-xs xl:tracking-[0.12em]"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-            {/* Right Column: Account, Wishlist, Cart */}
-            <div className="flex items-center justify-end gap-1 sm:gap-2">
-              <Link
-                to={isAuthenticated ? "/account" : "/login"}
-                className="hidden sm:inline-flex items-center gap-1.5 p-2 text-sasta-heading hover:text-sasta-gold-dark hover:bg-sasta-yellow-cream rounded-full transition-colors"
-                title={isAuthenticated ? `My Account (${user?.name})` : "Sign In / Register"}
-              >
-                <User className="w-5 h-5" />
-                {isAuthenticated && (
-                  <span className="hidden xl:inline text-xs font-bold text-sasta-navy max-w-[90px] truncate">
-                    {user?.name?.split(' ')[0]}
-                  </span>
-                )}
-              </Link>
-
-              {/* Wishlist */}
-              <Link
-                to="/wishlist"
-                className="relative p-2 text-sasta-heading hover:text-sasta-gold-dark hover:bg-sasta-yellow-cream rounded-full transition-colors"
-                aria-label="Wishlist"
-              >
-                <Heart className="w-5 h-5" />
-                {wishlistCount > 0 && (
-                  <span className="absolute top-1 right-1 bg-sasta-gold text-sasta-heading text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
-                    {wishlistCount}
-                  </span>
-                )}
-              </Link>
-
-              {/* Cart Bag */}
-              <button
-                type="button"
-                onClick={openCart}
-                className="relative p-2 text-sasta-heading hover:text-sasta-gold-dark hover:bg-sasta-yellow-cream rounded-full transition-colors"
-                aria-label="Shopping bag"
-              >
-                <ShoppingBag className="w-5 h-5" />
-                {totalCount > 0 && (
-                  <span className="absolute top-1 right-1 bg-sasta-navy text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
-                    {totalCount}
-                  </span>
-                )}
-              </button>
-            </div>
+          <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1 lg:w-[150px]">
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="hidden rounded-full p-2 text-sasta-heading transition-colors hover:bg-black/5 lg:inline-flex"
+              aria-label="Search products"
+            >
+              <Search className="h-[18px] w-[18px]" />
+            </button>
+            <Link
+              to="/wishlist"
+              className="relative hidden rounded-full p-2 text-sasta-heading transition-colors hover:bg-black/5 sm:inline-flex"
+              aria-label={`Wishlist${wishlistCount ? `, ${wishlistCount} items` : ''}`}
+            >
+              <Heart className="h-[18px] w-[18px]" />
+              {wishlistCount > 0 && <span className="absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#a4ed00] px-1 text-[9px] font-bold text-black">{wishlistCount}</span>}
+            </Link>
+            <Link
+              to={isAuthenticated ? '/account' : '/login'}
+              title={isAuthenticated ? `My account (${user?.name || ''})` : 'Sign in'}
+              className="hidden rounded-full p-2 text-sasta-heading transition-colors hover:bg-black/5 xl:inline-flex"
+              aria-label={isAuthenticated ? 'My account' : 'Sign in'}
+            >
+              <User className="h-[18px] w-[18px]" />
+            </Link>
+            <button
+              type="button"
+              onClick={openCart}
+              className="relative rounded-full p-2 text-sasta-heading transition-colors hover:bg-black/5"
+              aria-label={`Shopping bag${totalCount ? `, ${totalCount} items` : ''}`}
+            >
+              <ShoppingBag className="h-[19px] w-[19px]" />
+              <span className="absolute -right-0.5 -top-0.5 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[#a4ed00] px-1 text-[9px] font-bold text-black">
+                {totalCount}
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Desktop Navigation Bar */}
-        <nav className="hidden lg:block border-t border-sasta-border/60 bg-white">
-          <div className="max-w-7xl mx-auto px-6">
-            <ul className="flex items-center justify-center space-x-8 text-xs font-bold uppercase tracking-widest text-sasta-heading py-2.5">
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-sasta-gold-dark transition-colors py-2 block"
-                >
-                  Home
-                </Link>
-              </li>
-
-              {/* Shop All with Mega Menu */}
-              <li
-                onMouseEnter={() => setIsMegaMenuOpen(true)}
-                className="relative"
-              >
-                <Link
-                  to="/shop"
-                  className="hover:text-sasta-gold-dark transition-colors py-2 flex items-center gap-1"
-                >
-                  <span>Shop All</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </Link>
-              </li>
-
-              <li>
-                <Link
-                  to="/shop?filter=new"
-                  className="hover:text-sasta-gold-dark transition-colors py-2 block"
-                >
-                  New Arrivals
-                </Link>
-              </li>
-
-              <li>
-                <Link
-                  to="/shop?filter=sale"
-                  className="text-red-600 hover:text-red-700 transition-colors py-2 flex items-center gap-1.5"
-                >
-                  <span>Sale</span>
-                  <span className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
-                    50% Off
-                  </span>
-                </Link>
-              </li>
-
-              {/* Help Dropdown */}
-              <li
-                className="relative"
-                onMouseEnter={() => setHelpDropdownOpen(true)}
-                onMouseLeave={() => setHelpDropdownOpen(false)}
-              >
-                <button
-                  type="button"
-                  className="hover:text-sasta-gold-dark transition-colors py-2 flex items-center gap-1 uppercase tracking-widest text-xs font-bold text-sasta-heading"
-                >
-                  <span>Help</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-
-                {helpDropdownOpen && (
-                  <div className="absolute top-full left-0 w-52 bg-white border border-sasta-border shadow-xl rounded-b-md py-2 z-50 animate-fade-in text-left">
-                    <Link
-                      to="/contact"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Contact Us
-                    </Link>
-                    <Link
-                      to="/size-guide"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Size Guides
-                    </Link>
-                    <Link
-                      to="/shipping-policy"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Shipping &amp; Tracked Delivery
-                    </Link>
-                    <Link
-                      to="/refund-policy"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Returns Policy
-                    </Link>
-                    <Link
-                      to="/faqs"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      FAQs
-                    </Link>
-                    <Link
-                      to="/care-instructions"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Garment Care Instructions
-                    </Link>
-                  </div>
-                )}
-              </li>
-
-              {/* Our Company Dropdown */}
-              <li
-                className="relative"
-                onMouseEnter={() => setCompanyDropdownOpen(true)}
-                onMouseLeave={() => setCompanyDropdownOpen(false)}
-              >
-                <button
-                  type="button"
-                  className="hover:text-sasta-gold-dark transition-colors py-2 flex items-center gap-1 uppercase tracking-widest text-xs font-bold text-sasta-heading"
-                >
-                  <span>Our Company</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-
-                {companyDropdownOpen && (
-                  <div className="absolute top-full left-0 w-52 bg-white border border-sasta-border shadow-xl rounded-b-md py-2 z-50 animate-fade-in text-left">
-                    <Link
-                      to="/about"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      About Sasta Bazaar
-                    </Link>
-                    <Link
-                      to="/customization"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Custom Tailoring Inquiries
-                    </Link>
-                    <Link
-                      to="/privacy-policy"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Privacy Policy
-                    </Link>
-                    <Link
-                      to="/terms-of-service"
-                      className="block px-4 py-2 text-xs normal-case font-medium text-sasta-body hover:bg-sasta-yellow-cream hover:text-sasta-heading"
-                    >
-                      Terms &amp; Conditions
-                    </Link>
-                  </div>
-                )}
-              </li>
-            </ul>
-          </div>
-        </nav>
-
-        {/* Mega Menu Overlay */}
-        <MegaMenu
-          isOpen={isMegaMenuOpen}
-          onClose={() => setIsMegaMenuOpen(false)}
-        />
+        <MegaMenu isOpen={isMegaMenuOpen} onClose={() => setIsMegaMenuOpen(false)} />
       </header>
 
-      {/* Mobile Drawer */}
-      <MobileNav
-        isOpen={isMobileNavOpen}
-        onClose={() => setIsMobileNavOpen(false)}
-      />
-
-      {/* Search Modal */}
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-      />
+      <MobileNav isOpen={isMobileNavOpen} onClose={() => setIsMobileNavOpen(false)} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>
   );
 }

@@ -37,6 +37,7 @@ try {
         ['scarves', { title: 'Premium Jersey Hijabs & Scarves', description: 'Ultra-soft, breathable double-stitched jersey hijabs available in over 30 beautiful pastel and earthy tones.' }]
       ])],
       ['home_copy', {
+        announcement: 'Elegance Crafted for Your Most Beautiful Moments',
         hero: {
           eyebrow: 'SPECIAL OFFERS • UP TO 50% OFF',
           title: 'Everyday Luxury Ethnic Fashion',
@@ -63,6 +64,13 @@ try {
         [contentKey, JSON.stringify(content)]
       );
     }
+
+    await client.query(
+      `UPDATE storefront_content
+       SET content = jsonb_set(content, '{announcement}', to_jsonb($1::text), TRUE)
+       WHERE content_key = 'home_copy' AND NOT (content ? 'announcement')`,
+      ['Elegance Crafted for Your Most Beautiful Moments']
+    );
 
     await client.query(`
       INSERT INTO coupons (code, discount_type, discount_value, is_active)

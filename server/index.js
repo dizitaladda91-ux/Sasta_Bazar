@@ -16,10 +16,21 @@ app.use(express.json());
 const toPublicId = (value) => /^\d+$/.test(String(value)) ? Number(value) : value;
 const money = (value) => Math.round(Number(value) * 100) / 100;
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const withoutImages = (value) => {
+  if (Array.isArray(value)) return value.map(withoutImages);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !['image', 'images', 'primaryImage', 'hoverImage'].includes(key))
+    .map(([key, entry]) => [key, withoutImages(entry)]));
+};
 
 async function getProducts(where = '', values = [], orderBy = '') {
   const { rows } = await query(
-    `SELECT p.*, c.name AS subcategory_name,
+    `SELECT p.id, p.external_id, p.handle, p.title, p.raw_title, p.category_id,
+            p.subcategory, p.collection_slug, p.price, p.compare_at_price,
+            p.discount_percent, p.currency, p.stock, p.description, p.sizes,
+            p.colors, p.vendor, p.is_best_seller, p.is_new_arrival,
+            c.name AS subcategory_name,
             COALESCE(parent.name, c.name) AS category_name
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
@@ -29,7 +40,8 @@ async function getProducts(where = '', values = [], orderBy = '') {
   );
   if (!rows.length) return [];
   const variants = await query(
-    `SELECT v.*, p.id AS product_id FROM variants v
+    `SELECT v.id, v.external_id, v.product_id, v.title, v.size, v.color,
+            v.stock, v.is_available, v.price, v.compare_at_price FROM variants v
      JOIN products p ON p.id = v.product_id WHERE p.id = ANY($1::bigint[])
      ORDER BY v.id`,
     [rows.map((product) => product.id)]
@@ -43,8 +55,7 @@ async function getProducts(where = '', values = [], orderBy = '') {
       stock: variant.stock,
       price: Number(variant.price),
       compareAtPrice: variant.compare_at_price == null ? null : Number(variant.compare_at_price),
-      available: variant.is_available,
-      image: variant.image_url || undefined
+      available: variant.is_available
     }));
     return {
       id: toPublicId(row.external_id || row.id),
@@ -60,10 +71,6 @@ async function getProducts(where = '', values = [], orderBy = '') {
       currency: '£',
       stock: row.stock,
       available: row.stock > 0,
-      images: row.images,
-      primaryImage: row.primary_image,
-      hoverImage: row.hover_image,
-      isImagePlaceholder: row.is_image_placeholder,
       description: row.description,
       sizes: row.sizes.length ? row.sizes : productVariants.map((variant) => variant.size).filter(Boolean),
       colors: row.colors.length ? row.colors : productVariants.map((variant) => variant.color).filter(Boolean),
@@ -80,7 +87,10 @@ async function getOrder(orderId) {
   if (!result.rowCount) return null;
   const row = result.rows[0];
   const itemRows = await query(
-    `SELECT item.*, variant.external_id AS variant_external_id, product.external_id AS product_external_id
+    `SELECT item.id, item.product_id, item.variant_id, item.product_title, item.variant_title,
+            item.size, item.color, item.unit_price, item.quantity, item.line_total,
+            variant.external_id AS variant_external_id,
+            product.external_id AS product_external_id, product.handle AS product_handle
      FROM order_items item
      LEFT JOIN variants variant ON variant.id = item.variant_id
      LEFT JOIN products product ON product.id = item.product_id
@@ -105,7 +115,7 @@ async function getOrder(orderId) {
       color: item.color,
       price: Number(item.unit_price),
       quantity: item.quantity,
-      image: item.image_url
+      handle: item.product_handle
     })),
     subtotal: Number(row.subtotal),
     shipping: Number(row.shipping),
@@ -220,7 +230,7 @@ app.get('/api/products/:handle', route(async (req, res) => {
 
 app.get('/api/categories', route(async (_req, res) => {
   const { rows } = await query(`
-    SELECT parent.name, parent.slug, parent.description, parent.image_url,
+    SELECT parent.name, parent.slug, parent.description,
            COUNT(DISTINCT p.id)::int AS count,
            COALESCE(array_agg(DISTINCT child.name) FILTER (WHERE child.name IS NOT NULL), '{}') AS subcategories
     FROM categories parent
@@ -228,13 +238,13 @@ app.get('/api/categories', route(async (_req, res) => {
     LEFT JOIN products p ON p.category_id = child.id AND p.is_active = TRUE
     WHERE parent.parent_id IS NULL GROUP BY parent.id ORDER BY parent.sort_order, parent.name
   `);
-  res.json({ success: true, categories: rows.map(({ name, slug, description, image_url, count, subcategories }) => ({ name, slug, description, image: image_url, count, subcategories })) });
+  res.json({ success: true, categories: rows.map(({ name, slug, description, count, subcategories }) => ({ name, slug, description, count, subcategories })) });
 }));
 
 app.get('/api/storefront/content/:key', route(async (req, res) => {
   const { rows } = await query('SELECT content FROM storefront_content WHERE content_key = $1', [req.params.key]);
   if (!rows.length) return res.status(404).json({ success: false, message: 'Store content was not found.' });
-  res.json({ success: true, content: rows[0].content });
+  res.json({ success: true, content: withoutImages(rows[0].content) });
 }));
 
 app.post('/api/orders', route(async (req, res) => {
@@ -250,7 +260,7 @@ app.post('/api/orders', route(async (req, res) => {
       const quantity = Number(item.quantity);
       if (!Number.isInteger(quantity) || quantity < 1) throw Object.assign(new Error('Invalid item quantity.'), { status: 400 });
       const productResult = await client.query(
-      `SELECT id, title, primary_image, price, stock, is_active FROM products
+      `SELECT id, title, price, stock, is_active FROM products
          WHERE external_id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
         [String(item.productId ?? item.id ?? '')]
       );
@@ -258,11 +268,13 @@ app.post('/api/orders', route(async (req, res) => {
       const product = productResult.rows[0];
       const variantResult = item.variantId == null
         ? await client.query(
-            `SELECT * FROM variants WHERE product_id=$1 AND COALESCE(size,'')=$2 AND COALESCE(color,'')=$3 FOR UPDATE`,
+            `SELECT id, external_id, product_id, title, size, color, stock, is_available, price, compare_at_price
+             FROM variants WHERE product_id=$1 AND COALESCE(size,'')=$2 AND COALESCE(color,'')=$3 FOR UPDATE`,
             [product.id, item.size || '', item.color || '']
           )
         : await client.query(
-            `SELECT * FROM variants WHERE product_id=$1 AND (external_id=$2 OR id::text=$2) FOR UPDATE`,
+            `SELECT id, external_id, product_id, title, size, color, stock, is_available, price, compare_at_price
+             FROM variants WHERE product_id=$1 AND (external_id=$2 OR id::text=$2) FOR UPDATE`,
             [product.id, String(item.variantId)]
           );
       if (!variantResult.rowCount) throw Object.assign(new Error('A selected product option is no longer available.'), { status: 409 });
@@ -294,7 +306,7 @@ app.post('/api/orders', route(async (req, res) => {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [inserted.rows[0].id, product.id, variant.id,
           product.title, variant.title || item.size || item.color || '', variant.size || '',
-          variant.color || '', variant.image_url || product.primary_image, unitPrice, quantity, money(unitPrice * quantity)]
+          variant.color || '', '', unitPrice, quantity, money(unitPrice * quantity)]
       );
     }
   });

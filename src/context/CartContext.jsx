@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ENV } from '../config/env';
+import { getProductImageSet } from '../data/imageCatalog';
 
 const CartContext = createContext();
 
@@ -10,7 +11,10 @@ export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved).map((item) => ({
+        ...item,
+        image: getProductImageSet(item.handle).primaryImage,
+      })) : [];
     } catch (e) {
       console.error('Failed to parse cart from localStorage', e);
       return [];

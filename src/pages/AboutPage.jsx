@@ -57,7 +57,7 @@ export default function AboutPage() {
           </div>
 
           <div className="p-6 bg-sasta-yellow-cream/50 rounded-lg border border-sasta-border space-y-3">
-            <Sparkles className="w-6 h-6 text-sasta-gold-dark" />
+            
             <h3 className="font-serif font-bold text-base text-sasta-heading">
               Intricate Detailing
             </h3>

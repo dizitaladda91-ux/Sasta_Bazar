@@ -29,8 +29,8 @@ export default {
         'sasta-muted': '#888888',
       },
       fontFamily: {
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
-        sans: ['Montserrat', 'Inter', 'system-ui', 'sans-serif'],
+        serif: ['Montserrat', 'system-ui', 'sans-serif'],
+        sans: ['Montserrat', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         'subtle': '0 2px 10px rgba(0, 0, 0, 0.04)',

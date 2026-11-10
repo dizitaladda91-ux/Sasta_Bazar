@@ -854,7 +854,7 @@ export default function AuthPage() {
                   onClick={handleDemoLogin}
                   className="w-full bg-white hover:bg-sasta-yellow-cream border border-sasta-border text-sasta-navy text-xs font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-sasta-gold-dark" />
+                  
                   <span>⚡ Quick Demo Sign In (Ayesha Khan)</span>
                 </button>
               </div>

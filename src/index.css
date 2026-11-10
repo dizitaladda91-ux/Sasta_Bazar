@@ -3,13 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, button, input, select, textarea {
+    font-family: Montserrat, system-ui, sans-serif;
+  }
+
   body {
     @apply bg-white text-sasta-body antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply text-sasta-heading font-serif tracking-tight;
+    @apply text-sasta-heading tracking-tight;
   }
 }
 

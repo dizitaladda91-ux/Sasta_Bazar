@@ -10,7 +10,7 @@ export default function HeroBanner() {
           {/* Text Content */}
           <div className="lg:col-span-7 space-y-5 sm:space-y-6 text-center lg:text-left z-10 animate-slide-left">
             <div className="inline-flex items-center gap-2 bg-sasta-yellow-soft/80 border border-sasta-gold/40 px-3.5 py-1.5 rounded-full text-xs font-bold text-sasta-navy tracking-wide">
-              <Sparkles className="w-3.5 h-3.5 text-sasta-gold-dark" />
+              
               <span>SPECIAL OFFERS &bull; UP TO 50% OFF</span>
             </div>
 

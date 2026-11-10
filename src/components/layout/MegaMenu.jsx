@@ -135,7 +135,7 @@ export default function MegaMenu({ isOpen, onClose }) {
                   onClick={onClose}
                   className="text-sasta-body hover:text-sasta-heading hover:translate-x-1 inline-block transition-all flex items-center gap-1.5"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-sasta-gold-dark" />
+                  
                   Premium Jersey Hijabs (31 Shades)
                 </Link>
               </li>

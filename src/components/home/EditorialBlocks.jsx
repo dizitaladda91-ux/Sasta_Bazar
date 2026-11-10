@@ -71,7 +71,7 @@ export default function EditorialBlocks() {
 
           <RevealOnScroll direction="right" delay={150} className="lg:col-span-6 space-y-4 sm:space-y-6 text-center lg:text-left">
             <div className="inline-flex items-center gap-1.5 text-xs font-bold tracking-[0.25em] text-sasta-gold-dark uppercase">
-              <Sparkles className="w-4 h-4 text-sasta-gold-dark" />
+              
               <span>Contemporary Grace</span>
             </div>
 

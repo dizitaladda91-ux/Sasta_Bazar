@@ -302,7 +302,7 @@ export default function ProductDetailPage() {
               {/* Special Promotion note for Hijabs */}
               {product.category === 'Scarves' && (
                 <div className="p-2.5 bg-sasta-yellow-soft/80 border border-sasta-border rounded text-xs text-amber-900 font-semibold flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-sasta-gold-dark shrink-0" />
+                  
                   <span>Bundle Offer: Add 4 hijabs to your bag for just £9.99!</span>
                 </div>
               )}

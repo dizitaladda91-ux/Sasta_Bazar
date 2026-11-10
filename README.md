@@ -14,11 +14,11 @@
 │
 ├── server (Backend: Node.js + Express REST API)
 │   ├── Port: http://localhost:5000
-│   ├── Storage (No external DB required): server/data/
-│   │   ├── products.json   (Full 61 products catalog with real prices, sizes, and images)
-│   │   ├── orders.json     (Live orders with customer details, tracking numbers, items)
-│   │   ├── inquiries.json  (Customer messages and custom tailoring requests)
-│   │   └── subscribers.json (Newsletter email signups with 10% coupon codes)
+│   ├── Storage: PostgreSQL (schema in server/db/schema.sql)
+│   │   ├── users, addresses
+│   │   ├── categories, products, variants
+│   │   ├── orders, order_items, coupons
+│   │   └── reviews, inquiries, subscribers
 │   └── Endpoints:
 │       ├── GET  /api/products          (Search, filter by category/price/stock, sorting)
 │       ├── GET  /api/products/:handle   (Product details)
@@ -36,12 +36,32 @@
 
 ---
 
-## 🚀 How to Run (Single Command)
+## 🚀 Database Setup
 
-In your terminal:
+Create a project in Supabase. In the Supabase dashboard, open **Connect** and copy
+the **Session pooler** connection string (port `5432`). Copy `.env.example` to
+`.env`, then replace `<project-ref>`, `<region>`, and `<database-password>` in
+`DATABASE_URL` with the values from your project. Keep `DATABASE_SSL=true`.
+If your database password contains URL-reserved characters, URL-encode it first.
+
+The backend connects to Supabase's PostgreSQL database using the `pg` driver;
+keep the database connection string on the server and never expose it in frontend
+code. After saving `.env`, initialize the schema and import the existing JSON
+catalog, orders, users, inquiries, and subscribers:
+
 ```powershell
-cd "c:\Users\Divyanshu\Desktop\sasta bazar"
+npm run db:init
+```
 
+The import is safe to rerun: existing products, accounts, orders, inquiries, and subscribers
+are not duplicated. Legacy account passwords are hashed with bcrypt during import.
+Variant stock initializes to `0` because the current JSON catalog does not contain
+stock counts; existing availability flags are retained separately.
+
+## 🚀 How to Run
+
+From the project directory, run:
+```powershell
 # Starts BOTH Backend Server (Port 5000) and Frontend (Port 3000) concurrently:
 npm run dev
 ```
@@ -64,5 +84,5 @@ npm run dev
    - Customers track their order status on `/track-order`.
    - Store owners update statuses (Processing &rarr; Dispatched &rarr; Delivered) in the Admin Dashboard.
 3. **Customer Inquiries & Newsletter Leads**:
-   - Contact form messages stored in `server/data/inquiries.json`.
-   - Newsletter signups automatically receive the `WELCOME10` 10% discount coupon code and persist in `server/data/subscribers.json`.
+   - Contact form messages stored in PostgreSQL.
+   - Newsletter signups automatically receive the `WELCOME10` 10% discount coupon code and persist in PostgreSQL.

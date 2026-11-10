@@ -1,5 +1,5 @@
 import React from 'react';
-import { Truck, ShieldCheck, Sparkles, Headphones, RefreshCw } from 'lucide-react';
+import { Truck, ShieldCheck, Headphones, RefreshCw } from 'lucide-react';
 
 export default function TrustStrip() {
   const trustFeatures = [
@@ -14,7 +14,7 @@ export default function TrustStrip() {
       subtitle: '100% encrypted checkout with Apple Pay, Visa, Klarna'
     },
     {
-      icon: Sparkles,
+      icon: null,
       title: 'PREMIUM QUALITY',
       subtitle: 'Rigorous fabric inspection & authentic ethnic detailing'
     },
@@ -36,9 +36,11 @@ export default function TrustStrip() {
                 key={index}
                 className="flex items-center gap-4 p-3 bg-white/70 rounded-lg border border-sasta-border/70 shadow-2xs hover:bg-white transition-colors"
               >
-                <div className="w-12 h-12 rounded-full bg-sasta-yellow-soft flex items-center justify-center shrink-0 text-sasta-gold-dark border border-sasta-border">
-                  <Icon className="w-6 h-6" />
-                </div>
+                {Icon && (
+                  <div className="w-12 h-12 rounded-full bg-sasta-yellow-soft flex items-center justify-center shrink-0 text-sasta-gold-dark border border-sasta-border">
+                    <Icon className="w-6 h-6" />
+                  </div>
+                )}
                 <div>
                   <h4 className="font-serif font-bold text-xs uppercase tracking-wider text-sasta-heading">
                     {feat.title}

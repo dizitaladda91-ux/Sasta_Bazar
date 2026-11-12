@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import SEO from '../components/common/SEO';
 import SEORankingContent from '../components/common/SEORankingContent';
 import HeroBanner from '../components/home/HeroBanner';
-import CategoryTiles from '../components/home/CategoryTiles';
 import NewArrivals from '../components/home/NewArrivals';
 import SignatureCollection from '../components/home/SignatureCollection';
 import EditorialBlocks from '../components/home/EditorialBlocks';
@@ -60,7 +59,6 @@ export default function HomePage() {
         schema={homeSchema}
       />
       <HeroBanner />
-      <CategoryTiles />
       <NewArrivals />
       <SignatureCollection />
       <EditorialBlocks />

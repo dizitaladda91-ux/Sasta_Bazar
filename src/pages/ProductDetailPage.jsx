@@ -152,17 +152,13 @@ export default function ProductDetailPage() {
                 className="w-full h-full object-cover transition-all duration-300"
               />
 
-              {/* Discount / Status Badges */}
+              {/* Discount Badge */}
               <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                {!product.available ? (
-                  <span className="bg-neutral-800 text-white text-xs font-bold px-3 py-1 uppercase tracking-wider rounded">
-                    Sold Out
-                  </span>
-                ) : product.discountPercent > 0 ? (
+                {product.discountPercent > 0 && (
                   <span className="bg-sasta-gold text-sasta-heading text-xs font-bold px-3 py-1 uppercase tracking-wider rounded shadow-xs">
                     {product.discountPercent}% OFF
                   </span>
-                ) : null}
+                )}
               </div>
 
               {/* Wishlist Button on Image */}

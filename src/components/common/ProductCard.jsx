@@ -61,15 +61,11 @@ export default function ProductCard({ product }) {
 
         {/* Badges Overlay */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 z-10 pointer-events-none">
-          {!product.available ? (
-            <span className="bg-neutral-800 text-white text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider rounded">
-              Sold Out
-            </span>
-          ) : product.discountPercent > 0 ? (
+          {product.discountPercent > 0 && (
             <span className="bg-sasta-gold text-sasta-heading text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider rounded shadow-xs">
               {product.discountPercent}% OFF
             </span>
-          ) : null}
+          )}
 
           {product.isNewArrival && product.available && (
             <span className="bg-sasta-yellow-cream text-sasta-heading border border-sasta-border text-[9px] font-bold px-1.5 py-0.5 uppercase tracking-wider rounded shadow-2xs">

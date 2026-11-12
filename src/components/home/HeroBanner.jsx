@@ -21,7 +21,7 @@ export default function HeroBanner() {
         <img
           src={heroImages[activeImage]}
           alt={`Sasta Bazaar collection banner ${activeImage + 1}`}
-          className="absolute inset-0 h-full w-full object-cover object-center"
+          className="absolute inset-0 h-full w-full object-cover object-center brightness-[0.85]"
           fetchPriority="high"
         />
         <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-black/10 via-black/25 to-black/45" />

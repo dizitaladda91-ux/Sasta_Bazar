@@ -63,12 +63,12 @@ export default function Header() {
               <Search className="h-5 w-5" />
             </button>
             <Link to="/" className="hidden lg:block">
-              <img src="/logo.png" alt="Sasta Bazaar" className="h-[62px] w-auto max-w-[140px] object-contain" />
+              <img src="/logo.png" alt="Sasta Bazaar" className="h-[80px] w-auto max-w-[130px] object-contain mix-blend-multiply" />
             </Link>
           </div>
 
           <Link to="/" className="absolute left-1/2 -translate-x-1/2 lg:hidden">
-            <img src="/logo.png" alt="Sasta Bazaar" className="h-[54px] w-auto max-w-[130px] object-contain" />
+            <img src="/logo.png" alt="Sasta Bazaar" className="h-[64px] w-auto max-w-[118px] object-contain mix-blend-multiply" />
           </Link>
 
           <nav className="hidden min-w-0 flex-1 lg:block" aria-label="Main navigation">

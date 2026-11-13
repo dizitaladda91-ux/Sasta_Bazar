@@ -4,10 +4,11 @@ import { X, ChevronDown, ChevronRight, Heart, ShoppingBag, ShieldCheck, User } f
 import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { NAV_CATEGORIES } from '../../data/categories';
 
 export default function MobileNav({ isOpen, onClose }) {
   const [openSections, setOpenSections] = useState({
-    shopAll: true,
+    categories: true,
     help: false,
     company: false
   });
@@ -99,127 +100,44 @@ export default function MobileNav({ isOpen, onClose }) {
             </Link>
           </div>
 
-          {/* Shop All Accordion */}
+          {/* Categories Accordion */}
           <div className="px-4 py-2">
             <button
-              onClick={() => toggleSection('shopAll')}
+              onClick={() => toggleSection('categories')}
               className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-sasta-heading py-2"
             >
-              <span>Shop All</span>
-              {openSections.shopAll ? (
+              <span>Categories</span>
+              {openSections.categories ? (
                 <ChevronDown className="w-4 h-4 text-sasta-muted" />
               ) : (
                 <ChevronRight className="w-4 h-4 text-sasta-muted" />
               )}
             </button>
 
-            {openSections.shopAll && (
-              <div className="pl-3 pb-2 space-y-2.5 text-xs animate-fade-in border-l border-sasta-gold/40 ml-1 mt-1">
-                <Link
-                  to="/shop"
-                  onClick={handleLinkClick}
-                  className="block font-semibold text-sasta-navy hover:text-sasta-gold-dark"
-                >
-                  View All Products &rarr;
-                </Link>
-
-                <div className="pt-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-sasta-muted block mb-1">
-                    Ladies Collection
-                  </span>
-                  <div className="space-y-1.5 pl-2">
-                    <Link
-                      to="/collection/casual-wear"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Casual Everyday Wear Suits
-                    </Link>
-                    <Link
-                      to="/collection/lehenga-choli"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Lehenga Choli
-                    </Link>
-                    <Link
-                      to="/collection/sharara-gharara-suits"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Sharara &amp; Gharara Suits
-                    </Link>
-                    <Link
-                      to="/collection/salwar-kameez-suit-sets"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Salwar Kameez / Suit Sets
-                    </Link>
-                    <Link
-                      to="/collection/dresses"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Dresses
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-sasta-muted block mb-1">
-                    Other Collections
-                  </span>
-                  <div className="space-y-1.5 pl-2">
-                    <Link
-                      to="/collection/kids-collection"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Kids Collection
-                    </Link>
-                    <Link
-                      to="/collection/unstitched-suits"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Unstitched Suits
-                    </Link>
-                    <Link
-                      to="/collection/scarves"
-                      onClick={handleLinkClick}
-                      className="block text-sasta-body hover:text-sasta-heading py-0.5"
-                    >
-                      Scarves &amp; Hijabs
-                    </Link>
-                  </div>
-                </div>
+            {openSections.categories && (
+              <div className="ml-1 mt-1 space-y-1 border-l border-sasta-gold/40 pb-2 pl-3 text-xs animate-fade-in">
+                {NAV_CATEGORIES.map((category) => (
+                  <Link
+                    key={category.path}
+                    to={category.path}
+                    onClick={handleLinkClick}
+                    className="block py-1 text-sasta-body hover:text-sasta-heading"
+                  >
+                    {category.name}
+                  </Link>
+                ))}
               </div>
             )}
           </div>
 
-          {/* New Arrivals */}
+          {/* Contact Us */}
           <div className="px-4 py-2">
             <Link
-              to="/shop?filter=new"
+              to="/contact"
               onClick={handleLinkClick}
               className="block text-sm font-semibold uppercase tracking-wider text-sasta-heading hover:text-sasta-gold-dark py-1"
             >
-              New Arrivals
-            </Link>
-          </div>
-
-          {/* Sale */}
-          <div className="px-4 py-2">
-            <Link
-              to="/shop?filter=sale"
-              onClick={handleLinkClick}
-              className="flex items-center justify-between text-sm font-bold uppercase tracking-wider text-red-600 hover:text-red-700 py-1"
-            >
-              <span>Sale (Up to 50% Off)</span>
-              <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                Hot
-              </span>
+              Contact Us
             </Link>
           </div>
 
@@ -239,9 +157,6 @@ export default function MobileNav({ isOpen, onClose }) {
 
             {openSections.help && (
               <div className="pl-3 pb-2 space-y-2 text-xs animate-fade-in border-l border-sasta-gold/40 ml-1 mt-1">
-                <Link to="/contact" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
-                  Contact Us
-                </Link>
                 <Link to="/size-guide" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
                   Size Guide
                 </Link>
@@ -282,9 +197,6 @@ export default function MobileNav({ isOpen, onClose }) {
               <div className="pl-3 pb-2 space-y-2 text-xs animate-fade-in border-l border-sasta-gold/40 ml-1 mt-1">
                 <Link to="/about" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
                   About Sasta Bazaar
-                </Link>
-                <Link to="/contact" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
-                  Customer Care
                 </Link>
                 <Link to="/privacy-policy" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
                   Privacy Policy

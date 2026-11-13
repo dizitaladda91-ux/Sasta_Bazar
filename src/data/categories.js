@@ -52,6 +52,18 @@ export const CATEGORIES = [
   }
 ];
 
+export const NAV_CATEGORIES = [
+  { name: 'All', path: '/shop' },
+  { name: 'Casual Everyday Wear Suits', path: '/collection/casual-wear' },
+  { name: 'Salwar Kameez / Suit Sets', path: '/collection/salwar-kameez-suit-sets' },
+  { name: 'Dresses', path: '/collection/dresses' },
+  { name: 'Lehenga Choli', path: '/collection/lehenga-choli' },
+  { name: 'Sharara & Gharara Suits', path: '/collection/sharara-gharara-suits' },
+  { name: 'Kids Collection', path: '/collection/kids-collection' },
+  { name: 'Unstitched Suits', path: '/collection/unstitched-suits' },
+  { name: 'Scarves', path: '/collection/scarves' }
+];
+
 export const SIGNATURE_COLLECTIONS = [
   {
     id: 'casual-wear',

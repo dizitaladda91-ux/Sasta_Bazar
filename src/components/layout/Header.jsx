@@ -9,12 +9,7 @@ import MobileNav from './MobileNav';
 import SearchModal from './SearchModal';
 
 const navigation = [
-  { label: 'Shop', to: '/shop' },
-  { label: 'Bridal Wear', to: '/collection/lehenga-choli' },
-  { label: 'Party Wear', to: '/collection/sharara-gharara-suits' },
-  { label: 'Signature Collection', to: '/shop?filter=best-seller' },
-  { label: 'Casual Collection', to: '/collection/casual-wear' },
-  { label: 'About Us', to: '/about' },
+  { label: 'All', to: '/shop' },
   { label: 'Contact Us', to: '/contact' },
 ];
 

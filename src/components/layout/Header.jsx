@@ -32,7 +32,7 @@ export default function Header() {
   return (
     <>
       <header className={`sticky top-0 z-40 bg-[#fcfaf7] transition-shadow duration-300 ${isScrolled ? 'shadow-md' : ''}`}>
-        <div className="mx-auto flex h-[82px] max-w-[1780px] items-center justify-between gap-3 px-4 sm:h-[96px] sm:px-7 lg:px-10">
+        <div className="mx-auto flex h-[82px] max-w-[1780px] items-center justify-between gap-3 px-4 sm:h-[96px] sm:px-7 lg:h-auto lg:min-h-[96px] lg:px-10 lg:py-3">
           <div className="flex shrink-0 items-center gap-1 lg:w-[150px]">
             <button
               type="button"
@@ -60,11 +60,30 @@ export default function Header() {
           </Link>
 
           <nav className="hidden min-w-0 flex-1 lg:block" aria-label="Main navigation">
-            <ul className="flex items-center justify-center gap-4 xl:gap-7 2xl:gap-9">
+            <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 xl:gap-x-4 2xl:gap-x-5">
+              {NAV_CATEGORIES.map((category) => {
+                const isActive = category.path === '/shop'
+                  ? location.pathname === '/shop'
+                  : location.pathname.startsWith(category.path);
+
+                return (
+                  <li key={category.path} className="shrink-0">
+                    <Link
+                      to={category.path}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`whitespace-nowrap text-[9px] transition-colors hover:text-[#8d6b36] xl:text-[10px] 2xl:text-[11px] ${
+                        isActive ? 'font-semibold text-[#8d6b36]' : 'text-[#514b45]'
+                      }`}
+                    >
+                      {category.name}
+                    </Link>
+                  </li>
+                );
+              })}
               <li className="shrink-0">
                 <Link
                   to="/contact"
-                  className="whitespace-nowrap py-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-[#34312e] transition-colors hover:text-[#8d6b36] xl:text-xs xl:tracking-[0.12em]"
+                  className="whitespace-nowrap py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#34312e] transition-colors hover:text-[#8d6b36] xl:text-[10px] xl:tracking-[0.1em] 2xl:text-[11px]"
                 >
                   Contact Us
                 </Link>
@@ -110,30 +129,6 @@ export default function Header() {
             </button>
           </div>
         </div>
-
-        <nav className="hidden border-t border-[#e9e3da] bg-white lg:block" aria-label="Product categories">
-          <ul className="mx-auto flex max-w-[1780px] flex-wrap items-center justify-center gap-x-5 gap-y-2 px-5 py-3 xl:gap-x-7">
-            {NAV_CATEGORIES.map((category) => {
-              const isActive = category.path === '/shop'
-                ? location.pathname === '/shop'
-                : location.pathname.startsWith(category.path);
-
-              return (
-                <li key={category.path} className="shrink-0">
-                  <Link
-                    to={category.path}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`whitespace-nowrap text-[11px] transition-colors hover:text-[#8d6b36] xl:text-xs ${
-                      isActive ? 'font-semibold text-[#8d6b36]' : 'text-[#514b45]'
-                    }`}
-                  >
-                    {category.name}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
       </header>
 
       <MobileNav isOpen={isMobileNavOpen} onClose={() => setIsMobileNavOpen(false)} />

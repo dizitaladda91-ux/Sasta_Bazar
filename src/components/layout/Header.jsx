@@ -4,17 +4,11 @@ import { Heart, Menu, Search, ShoppingBag, User } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
-import MegaMenu from './MegaMenu';
 import MobileNav from './MobileNav';
 import SearchModal from './SearchModal';
-
-const navigation = [
-  { label: 'All', to: '/shop' },
-  { label: 'Contact Us', to: '/contact' },
-];
+import { NAV_CATEGORIES } from '../../data/categories';
 
 export default function Header() {
-  const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -31,7 +25,6 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
-    setIsMegaMenuOpen(false);
     setIsMobileNavOpen(false);
     setIsSearchOpen(false);
   }, [location.pathname]);
@@ -68,21 +61,14 @@ export default function Header() {
 
           <nav className="hidden min-w-0 flex-1 lg:block" aria-label="Main navigation">
             <ul className="flex items-center justify-center gap-4 xl:gap-7 2xl:gap-9">
-              {navigation.map((item, index) => (
-                <li
-                  key={item.label}
-                  className="shrink-0"
-                  onMouseEnter={index === 0 ? () => setIsMegaMenuOpen(true) : undefined}
+              <li className="shrink-0">
+                <Link
+                  to="/contact"
+                  className="whitespace-nowrap py-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-[#34312e] transition-colors hover:text-[#8d6b36] xl:text-xs xl:tracking-[0.12em]"
                 >
-                  <Link
-                    to={item.to}
-                    onFocus={index === 0 ? () => setIsMegaMenuOpen(true) : undefined}
-                    className="whitespace-nowrap py-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-[#34312e] transition-colors hover:text-[#8d6b36] xl:text-xs xl:tracking-[0.12em]"
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
+                  Contact Us
+                </Link>
+              </li>
             </ul>
           </nav>
 
@@ -125,7 +111,29 @@ export default function Header() {
           </div>
         </div>
 
-        <MegaMenu isOpen={isMegaMenuOpen} onClose={() => setIsMegaMenuOpen(false)} />
+        <nav className="hidden border-t border-[#e9e3da] bg-white lg:block" aria-label="Product categories">
+          <ul className="mx-auto flex max-w-[1780px] flex-wrap items-center justify-center gap-x-5 gap-y-2 px-5 py-3 xl:gap-x-7">
+            {NAV_CATEGORIES.map((category) => {
+              const isActive = category.path === '/shop'
+                ? location.pathname === '/shop'
+                : location.pathname.startsWith(category.path);
+
+              return (
+                <li key={category.path} className="shrink-0">
+                  <Link
+                    to={category.path}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`whitespace-nowrap text-[11px] transition-colors hover:text-[#8d6b36] xl:text-xs ${
+                      isActive ? 'font-semibold text-[#8d6b36]' : 'text-[#514b45]'
+                    }`}
+                  >
+                    {category.name}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
       </header>
 
       <MobileNav isOpen={isMobileNavOpen} onClose={() => setIsMobileNavOpen(false)} />

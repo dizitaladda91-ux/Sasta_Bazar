@@ -342,10 +342,16 @@ export default function ProductDetailPage() {
               <h3 className="font-serif font-bold text-base text-sasta-heading">
                 Product Details &amp; Highlights
               </h3>
-              <div
-                className="prose prose-sm text-xs sm:text-sm text-sasta-body leading-relaxed max-w-none"
-                dangerouslySetInnerHTML={{ __html: product.description }}
-              />
+              {product.description?.trim() ? (
+                <div
+                  className="product-description text-xs sm:text-sm text-sasta-body leading-relaxed max-w-none"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+              ) : (
+                <p className="text-xs sm:text-sm text-sasta-muted leading-relaxed">
+                  Product description is currently unavailable.
+                </p>
+              )}
 
               <div className="pt-2 flex flex-wrap gap-4 text-xs text-sasta-muted">
                 <Link to="/care-instructions" className="underline hover:text-sasta-heading">

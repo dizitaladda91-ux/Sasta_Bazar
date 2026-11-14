@@ -77,3 +77,29 @@
 .product-card:hover .product-card-img {
   transform: scale(1.04);
 }
+
+/* Product descriptions come from stored HTML and need spacing because the
+   typography plugin is not enabled in this project. */
+.product-description p + p,
+.product-description div + div,
+.product-description ul,
+.product-description ol {
+  margin-top: 0.75rem;
+}
+
+.product-description ul,
+.product-description ol {
+  padding-left: 1.25rem;
+}
+
+.product-description ul {
+  list-style: disc;
+}
+
+.product-description ol {
+  list-style: decimal;
+}
+
+.product-description li + li {
+  margin-top: 0.25rem;
+}

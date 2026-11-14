@@ -16,6 +16,11 @@ const connectionString = process.env.DATABASE_URL.trim().replace(/^['"]|['"]$/g,
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 const sslCaPath = process.env.DATABASE_SSL_CA;
 const sslCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
+const requestedPoolMax = Number(process.env.PG_POOL_MAX || '3');
+
+if (!Number.isInteger(requestedPoolMax) || requestedPoolMax < 1) {
+  throw new Error('PG_POOL_MAX must be a positive integer; the configured value is capped at 3.');
+}
 
 if (sslEnabled && !sslCaPath && !sslCaBase64) {
   throw new Error('Set DATABASE_SSL_CA to a local Supabase root CA certificate path or DATABASE_SSL_CA_BASE64 to its base64 contents when DATABASE_SSL=true.');
@@ -43,8 +48,7 @@ if (sslEnabled) {
 const poolOptions = {
   connectionString,
   ssl,
-  // Vercel may run multiple instances; keep each instance to one DB client.
-  max: Math.max(1, Number.parseInt(process.env.PG_POOL_MAX || '1', 10)),
+  max: Math.min(requestedPoolMax, 3),
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 10_000
 };

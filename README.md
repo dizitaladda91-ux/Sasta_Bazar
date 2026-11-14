@@ -59,6 +59,10 @@ keep the database connection string on the server and never expose it in fronten
 code. After saving `.env`, initialize the schema and import the existing JSON
 catalog, orders, users, inquiries, and subscribers:
 
+The PostgreSQL pool is capped at three connections per server instance. Keep
+`PG_POOL_MAX` at or below three and use the database provider's pooled connection
+string when deploying multiple serverless instances.
+
 ```powershell
 npm run db:init
 ```
@@ -90,7 +94,9 @@ server-only; only `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and the API URL belong in
 the browser bundle. In Vercel, configure the same values in Project Settings →
 Environment Variables, including `JWT_SECRET`, `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET`, `ALLOWED_ORIGINS`, and a random `CRON_SECRET` containing
-at least 32 characters. `ALLOWED_ORIGINS` is a comma-separated allowlist; include
+at least 32 characters. For shared API rate limits, also set
+`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; local development uses
+in-memory rate limits when both are absent. `ALLOWED_ORIGINS` is a comma-separated allowlist; include
 the production storefront origin and any local development origin you use.
 Next.js applies storefront CSP/security headers, while Helmet applies API headers.
 
@@ -125,7 +131,10 @@ For production, add a webhook endpoint in the Stripe Dashboard at
 `payment_intent.canceled`, and `charge.refunded`. Copy the endpoint's signing
 secret into the Vercel `STRIPE_WEBHOOK_SECRET` environment variable and redeploy.
 Vercel Cron is configured in `vercel.json` to call
-`/api/cron/release-stale-orders` every 15 minutes. Vercel sends the configured
+`/api/cron/release-stale-orders` daily at midnight UTC. Hobby allows one cron
+execution per day (with up to 59 minutes of scheduling delay), so unpaid inventory
+reservations can remain held until the next run. Use a Pro plan and a 15-minute
+schedule if stale reservations must be released promptly. Vercel sends the configured
 `CRON_SECRET` as a bearer token. The endpoint cancels unpaid Stripe intents
 before releasing their inventory; orders with successful payments are left for
 the Stripe webhook. For a manual run, use `npm run orders:release-stale`.

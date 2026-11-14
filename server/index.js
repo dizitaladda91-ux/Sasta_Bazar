@@ -324,12 +324,12 @@ app.get('/api/products', validate({ query: productsQuery }), route(async (req, r
   if (filter === 'sale') filters.push('p.discount_percent > 0');
   if (filter === 'new') filters.push('p.is_new_arrival = TRUE');
   if (filter === 'best-seller') filters.push('p.is_best_seller = TRUE');
-  let orderBy = {
-    'price-low': 'ORDER BY p.price ASC',
-    'price-high': 'ORDER BY p.price DESC',
-    discount: 'ORDER BY p.discount_percent DESC',
-    newest: 'ORDER BY p.is_new_arrival DESC, p.created_at DESC'
-  }[sort] || 'ORDER BY p.created_at DESC';
+  const orderBy = {
+    'price-low': 'ORDER BY p.price ASC, p.id',
+    'price-high': 'ORDER BY p.price DESC, p.id',
+    discount: 'ORDER BY p.discount_percent DESC, p.id',
+    newest: 'ORDER BY p.is_new_arrival DESC, p.created_at DESC, p.id'
+  }[sort] || 'ORDER BY p.created_at DESC, p.id';
   const where = filters.length ? `AND ${filters.join(' AND ')}` : '';
   const count = await query(
     `SELECT COUNT(DISTINCT p.id)::int AS total

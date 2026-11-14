@@ -729,7 +729,11 @@ app.put('/api/auth/profile', requireAuth, validate({ body: profileBody }), route
   });
   if (!updated) return res.status(404).json({ success: false, message: 'User not found' });
   const { rows } = await userWithAddressById(updated.id);
-  res.json({ success: true, message: 'Profile updated successfully', user: safeUser(rows[0], rows[0]) });
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    user: safeUser(rows[0], rows[0].street == null ? null : rows[0])
+  });
 }));
 
 app.get('/api/auth/orders', requireAuth, route(async (req, res) => {

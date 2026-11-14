@@ -131,8 +131,11 @@ async function getProducts(where = '', values = [], orderBy = '', pagination = n
      ORDER BY v.id`,
     [rows.map((product) => product.id)]
   );
-  return rows.map((row) => {
-    const productVariants = variants.rows.filter((variant) => variant.product_id === row.id).map((variant) => ({
+  const variantsByProduct = new Map();
+  for (const variant of variants.rows) {
+    const key = String(variant.product_id);
+    if (!variantsByProduct.has(key)) variantsByProduct.set(key, []);
+    variantsByProduct.get(key).push({
       id: toPublicId(variant.external_id || variant.id),
       title: variant.title,
       size: variant.size,
@@ -141,7 +144,10 @@ async function getProducts(where = '', values = [], orderBy = '', pagination = n
       price: Number(variant.price),
       compareAtPrice: variant.compare_at_price == null ? null : Number(variant.compare_at_price),
       available: variant.is_available
-    }));
+    });
+  }
+  return rows.map((row) => {
+    const productVariants = variantsByProduct.get(String(row.id)) || [];
     return {
       id: toPublicId(row.external_id || row.id),
       handle: row.handle,

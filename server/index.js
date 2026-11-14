@@ -77,6 +77,7 @@ const toPublicId = (value) => /^\d+$/.test(String(value)) ? Number(value) : valu
 const money = (value) => Math.round(Number(value) * 100) / 100;
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const categorySlug = (value) => slugify(value) || 'uncategorized';
+const normalizeOrderReference = (value) => String(value).trim().toUpperCase();
 const createOrderReference = () => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   const bytes = crypto.randomBytes(5);
@@ -215,7 +216,7 @@ function formatOrder(row, itemRows) {
 }
 
 async function getOrder(orderId) {
-  const result = await query('SELECT * FROM orders WHERE LOWER(order_ref) = LOWER($1)', [orderId]);
+  const result = await query('SELECT * FROM orders WHERE order_ref = $1', [normalizeOrderReference(orderId)]);
   if (!result.rowCount) return null;
   const itemRows = await query(
     `SELECT item.id, item.order_id, item.product_id, item.variant_id, item.product_title, item.variant_title,
@@ -566,8 +567,8 @@ app.get('/api/orders/:orderId', trackLimiter, optionalAuth,
   validate({ params: orderIdParams, query: trackingQuery }), route(async (req, res) => {
     const { orderId } = req.validated.params;
     const { rows } = await query(
-      'SELECT id, user_id, customer_email FROM orders WHERE LOWER(order_ref)=LOWER($1)',
-      [orderId]
+      'SELECT id, user_id, customer_email FROM orders WHERE order_ref=$1',
+      [normalizeOrderReference(orderId)]
     );
     if (!rows.length) return res.status(404).json({ success: false, message: 'Order not found.' });
     const orderRecord = rows[0];
@@ -786,8 +787,8 @@ app.patch('/api/admin/orders/:orderId', validate({ params: orderIdParams, body: 
   const { orderStatus, trackingNumber, courier } = req.validated.body;
   const updated = await inTransaction(async (client) => {
     const current = await client.query(
-      'SELECT id,order_status,payment_status FROM orders WHERE LOWER(order_ref)=LOWER($1) FOR UPDATE',
-      [req.validated.params.orderId]
+      'SELECT id,order_status,payment_status FROM orders WHERE order_ref=$1 FOR UPDATE',
+      [normalizeOrderReference(req.validated.params.orderId)]
     );
     if (!current.rowCount) return false;
     if (orderStatus) {

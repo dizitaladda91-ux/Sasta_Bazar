@@ -21,6 +21,8 @@ const identifier = z.union([
 ]);
 
 const productVariant = z.object({
+  id: identifier.optional(),
+  externalId: identifier.optional(),
   title: boundedText(160).optional(),
   size: boundedText(40).nullable().optional(),
   color: boundedText(60).nullable().optional(),

@@ -22,3 +22,54 @@ export function assertTopLevelStockAllowed(stock, variantCount) {
     );
   }
 }
+
+export async function replaceProductVariants(client, productId, variants, { price, compareAtPrice, defaultStock } = {}) {
+  const existingResult = await client.query(
+    'SELECT id, external_id FROM variants WHERE product_id=$1 ORDER BY id FOR UPDATE',
+    [productId]
+  );
+  const byId = new Map(existingResult.rows.map((variant) => [String(variant.id), variant]));
+  const byExternalId = new Map(existingResult.rows
+    .filter((variant) => variant.external_id != null)
+    .map((variant) => [String(variant.external_id), variant]));
+  const retainedIds = [];
+
+  for (const variant of variants) {
+    const externalId = variant.externalId == null ? null : String(variant.externalId);
+    const identity = externalId ?? (variant.id == null ? null : String(variant.id));
+    const existing = identity == null ? null : byExternalId.get(identity) || byId.get(identity);
+    const title = variant.title || variant.size || variant.color || '';
+    const size = variant.size || null;
+    const color = variant.color || null;
+    const stock = Number(variant.stock ?? defaultStock ?? 0) || 0;
+    const variantPrice = Number(variant.price ?? price);
+    const variantCompareAtPrice = variant.compareAtPrice === undefined
+      ? compareAtPrice ?? null
+      : variant.compareAtPrice;
+    const image = variant.image || null;
+
+    if (existing) {
+      await client.query(
+        `UPDATE variants SET external_id=COALESCE($2,external_id),title=$3,size=$4,color=$5,stock=$6,
+           is_available=$7,price=$8,compare_at_price=$9,image_url=$10 WHERE id=$1`,
+        [existing.id, externalId, title, size, color, stock, variant.available !== false,
+          variantPrice, variantCompareAtPrice, image]
+      );
+      retainedIds.push(existing.id);
+    } else {
+      const inserted = await client.query(
+        `INSERT INTO variants (product_id,external_id,title,size,color,stock,is_available,price,compare_at_price,image_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [productId, externalId ?? (variant.id == null ? null : String(variant.id)),
+          title, size, color, stock, variant.available !== false, variantPrice,
+          variantCompareAtPrice, image]
+      );
+      retainedIds.push(inserted.rows[0].id);
+    }
+  }
+
+  await client.query(
+    'UPDATE variants SET is_available=FALSE,stock=0 WHERE product_id=$1 AND NOT (id=ANY($2::bigint[]))',
+    [productId, retainedIds]
+  );
+}

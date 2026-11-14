@@ -19,7 +19,9 @@ import { getStripe } from './services/stripe.js';
 import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from './services/orders.js';
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
-import { assertTopLevelStockAllowed, getIncomingVariants } from './services/productRules.js';
+import {
+  assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants
+} from './services/productRules.js';
 import { requireCronSecret } from './middleware/cronAuth.js';
 import {
   generalLimiter, loginLimiter, registerLimiter, contactLimiter,
@@ -95,14 +97,14 @@ const withoutImages = (value) => {
     .map(([key, entry]) => [key, withoutImages(entry)]));
 };
 
-async function getProducts(where = '', values = [], orderBy = '', pagination = null) {
+async function getProducts(where = '', values = [], orderBy = '', pagination = null, runQuery = query) {
   const queryValues = [...values];
   let pageClause = '';
   if (pagination) {
     queryValues.push(pagination.limit, (pagination.page - 1) * pagination.limit);
     pageClause = ` LIMIT $${queryValues.length - 1} OFFSET $${queryValues.length}`;
   }
-  const { rows } = await query(
+  const { rows } = await runQuery(
     `SELECT p.id, p.external_id, p.handle, p.title, p.raw_title, p.category_id,
             p.subcategory, p.collection_slug, p.price, p.compare_at_price,
             p.discount_percent, p.currency, p.stock, p.description, p.sizes,
@@ -117,7 +119,7 @@ async function getProducts(where = '', values = [], orderBy = '', pagination = n
     queryValues
   );
   if (!rows.length) return [];
-  const variants = await query(
+  const variants = await runQuery(
     `SELECT v.id, v.external_id, v.product_id, v.title, v.size, v.color,
             v.stock, v.is_available, v.price, v.compare_at_price FROM variants v
      JOIN products p ON p.id = v.product_id WHERE p.id = ANY($1::bigint[])
@@ -290,9 +292,10 @@ async function createProduct(client, input) {
   const productId = result.rows[0].id;
   for (const [index, variant] of incomingVariants.entries()) {
     await client.query(
-      `INSERT INTO variants (product_id, title, size, color, stock, price, compare_at_price, image_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [productId, variant.title || variant.size || variant.color || '', variant.size || null,
+      `INSERT INTO variants (product_id, external_id, title, size, color, stock, price, compare_at_price, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [productId, variant.externalId ?? (variant.id == null ? null : String(variant.id)),
+        variant.title || variant.size || variant.color || '', variant.size || null,
         variant.color || null, Number(variant.stock ?? (index === 0 ? input.stock : 0)) || 0, Number(variant.price ?? price),
         variant.compareAtPrice ? Number(variant.compareAtPrice) : compareAtPrice, variant.image || null]
     );
@@ -743,25 +746,28 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
   );
   if (!productResult.rowCount) return res.status(404).json({ success: false, message: 'Product not found' });
   const productId = productResult.rows[0].id;
-  const existing = (await getProducts('AND p.id=$1', [productId]))[0];
-  if (!existing) return res.status(404).json({ success: false, message: 'Product not found' });
   const fields = req.validated.body;
-  const updated = {
-    title: fields.title ?? existing.title,
-    description: fields.description ?? existing.description,
-    price: fields.price ?? existing.price,
-    compareAtPrice: fields.compareAtPrice === undefined ? existing.compareAtPrice : fields.compareAtPrice,
-    stock: fields.stock ?? existing.stock,
-    category: fields.category ?? existing.category,
-    subcategory: fields.subcategory ?? existing.subcategory,
-    images: fields.images ?? existing.images,
-    sizes: fields.sizes ?? existing.sizes,
-    colors: fields.colors ?? existing.colors,
-    isBestSeller: fields.isBestSeller ?? existing.isBestSeller,
-    isNewArrival: fields.isNewArrival ?? existing.isNewArrival,
-    isActive: fields.isActive ?? existing.isActive
-  };
   await inTransaction(async (client) => {
+    const locked = await client.query('SELECT id FROM products WHERE id=$1 FOR UPDATE', [productId]);
+    if (!locked.rowCount) throw Object.assign(new Error('Product not found'), { status: 404 });
+    const runQuery = (text, values) => client.query(text, values);
+    const existing = (await getProducts('AND p.id=$1', [productId], '', null, runQuery))[0];
+    if (!existing) throw Object.assign(new Error('Product not found'), { status: 404 });
+    const updated = {
+      title: fields.title ?? existing.title,
+      description: fields.description ?? existing.description,
+      price: fields.price ?? existing.price,
+      compareAtPrice: fields.compareAtPrice === undefined ? existing.compareAtPrice : fields.compareAtPrice,
+      stock: fields.stock ?? existing.stock,
+      category: fields.category ?? existing.category,
+      subcategory: fields.subcategory ?? existing.subcategory,
+      images: fields.images ?? existing.images,
+      sizes: fields.sizes ?? existing.sizes,
+      colors: fields.colors ?? existing.colors,
+      isBestSeller: fields.isBestSeller ?? existing.isBestSeller,
+      isNewArrival: fields.isNewArrival ?? existing.isNewArrival,
+      isActive: fields.isActive ?? existing.isActive
+    };
     const price = Number(updated.price);
     const compareAtPrice = updated.compareAtPrice == null ? null : Number(updated.compareAtPrice);
     const discount = compareAtPrice > price ? Math.round((compareAtPrice - price) / compareAtPrice * 100) : 0;
@@ -793,30 +799,14 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
         const variants = await client.query('SELECT id FROM variants WHERE product_id=$1 ORDER BY id FOR UPDATE', [productId]);
         if (!variants.rowCount) throw Object.assign(new Error('Cannot set stock for a product without variants.'), { status: 409 });
         assertTopLevelStockAllowed(fields.stock, variants.rowCount);
-        for (const [index, variant] of variants.rows.entries()) {
-          await client.query('UPDATE variants SET stock=$2 WHERE id=$1', [variant.id, index === 0 ? updated.stock : 0]);
-        }
+        await client.query('UPDATE variants SET stock=$2 WHERE id=$1', [variants.rows[0].id, updated.stock]);
       }
     }
     if (Array.isArray(fields.variants)) {
       assertTopLevelStockAllowed(fields.stock, fields.variants.length);
-      const reserved = await client.query(
-        `SELECT 1 FROM order_items item JOIN orders order_row ON order_row.id=item.order_id
-         WHERE item.product_id=$1 AND order_row.payment_status='Pending' LIMIT 1`,
-        [productId]
-      );
-      if (reserved.rowCount) {
-        throw Object.assign(new Error('Variants cannot be replaced while payment is pending for this product.'), { status: 409 });
-      }
-      await client.query('DELETE FROM variants WHERE product_id=$1', [productId]);
-      for (const variant of fields.variants) {
-        await client.query(
-          `INSERT INTO variants (product_id,title,size,color,stock,is_available,price,compare_at_price,image_url)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [productId, variant.title || '', variant.size || null, variant.color || null, Number(variant.stock) || 0,
-            variant.available !== false, Number(variant.price ?? price), variant.compareAtPrice ?? null, variant.image || null]
-        );
-      }
+      await replaceProductVariants(client, productId, fields.variants, {
+        price, compareAtPrice, defaultStock: fields.stock
+      });
     }
     await syncProductStock(client, productId);
   });

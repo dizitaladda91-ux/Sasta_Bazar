@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/release-stale-orders",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

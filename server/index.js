@@ -19,6 +19,7 @@ import { getStripe } from './services/stripe.js';
 import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from './services/orders.js';
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
+import { verifyPassword } from './services/passwordRules.js';
 import {
   assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants, sortCheckoutItems
 } from './services/productRules.js';
@@ -638,7 +639,7 @@ app.post('/api/auth/register', registerLimiter, validate({ body: registerBody })
 app.post('/api/auth/login', loginLimiter, validate({ body: loginBody }), route(async (req, res) => {
   const { email, password } = req.validated.body;
   const { rows } = await userWithAddress(email);
-  if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
+  if (!(await verifyPassword(password, rows[0]?.password_hash))) {
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });
   }
   setAuthCookie(res, rows[0]);

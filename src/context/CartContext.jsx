@@ -7,14 +7,28 @@ const CartContext = createContext();
 const CART_STORAGE_KEY = 'sasta_bazaar_cart_v1';
 const FREE_SHIPPING_THRESHOLD = ENV.freeShippingThreshold; // £40 default for free delivery
 
+function normalizeCartItem(item) {
+  const variants = item.variants || [];
+  const size = item.size === 'Free Size' || item.size === 'Standard' ? null : item.size;
+  const color = item.color || null;
+  const variant = variants.find((candidate) =>
+    (!size || candidate.size === size) && (!color || candidate.color === color)
+  ) || (variants.length === 1 ? variants[0] : null);
+
+  return {
+    ...item,
+    size: size || variant?.size || null,
+    color: color || variant?.color || null,
+    variantId: item.variantId || variant?.id,
+    image: getProductImageSet(item.handle).primaryImage,
+  };
+}
+
 export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY);
-      return saved ? JSON.parse(saved).map((item) => ({
-        ...item,
-        image: getProductImageSet(item.handle).primaryImage,
-      })) : [];
+      return saved ? JSON.parse(saved).map(normalizeCartItem) : [];
     } catch (e) {
       console.error('Failed to parse cart from localStorage', e);
       return [];
@@ -40,9 +54,12 @@ export function CartProvider({ children }) {
   };
 
   const addToCart = (product, selectedSize = null, selectedColor = null, quantity = 1) => {
-    const defaultSize = selectedSize || (product.sizes && product.sizes[0]) || 'Free Size';
-    const defaultColor = selectedColor || (product.colors && product.colors[0]) || null;
+    const defaultSize = selectedSize || product.sizes?.[0] || null;
+    const defaultColor = selectedColor || product.colors?.[0] || null;
     const itemKey = `${product.id}_${defaultSize}_${defaultColor || ''}`;
+    const selectedVariant = product.variants?.find((variant) =>
+      (!defaultSize || variant.size === defaultSize) && (!defaultColor || variant.color === defaultColor)
+    ) || (product.variants?.length === 1 ? product.variants[0] : null);
 
     setCartItems(prev => {
       const existingIndex = prev.findIndex(item => item.itemKey === itemKey);
@@ -59,16 +76,14 @@ export function CartProvider({ children }) {
           {
             itemKey,
             id: product.id,
-            variantId: product.variants?.find((variant) =>
-              (!defaultSize || variant.size === defaultSize) && (!defaultColor || variant.color === defaultColor)
-            )?.id,
+            variantId: selectedVariant?.id,
             handle: product.handle,
             title: product.title,
             price: product.price,
             compareAtPrice: product.compareAtPrice,
             image: product.primaryImage || (product.images && product.images[0]) || '',
-            size: defaultSize,
-            color: defaultColor,
+            size: defaultSize || selectedVariant?.size || null,
+            color: defaultColor || selectedVariant?.color || null,
             quantity: quantity,
             currency: '£'
           }

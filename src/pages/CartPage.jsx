@@ -173,8 +173,8 @@ export default function CartPage() {
         items: cartItems.map((item) => ({
           productId: item.id,
           variantId: item.variantId,
-          size: item.size,
-          color: item.color,
+          ...(item.size ? { size: item.size } : {}),
+          ...(item.color ? { color: item.color } : {}),
           quantity: item.quantity
         })),
         promoCode,

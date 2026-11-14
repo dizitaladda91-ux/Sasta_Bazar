@@ -15,7 +15,7 @@ export default function ProductCard({ product }) {
     e.preventDefault();
     e.stopPropagation();
     if (product.available) {
-      addToCart(product, product.sizes?.[0] || 'Standard');
+      addToCart(product, product.sizes?.[0] || null, product.colors?.[0] || null);
     }
   };
 

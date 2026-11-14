@@ -528,7 +528,7 @@ app.get('/api/orders/:orderId', trackLimiter, optionalAuth,
 
 app.post('/api/contact', contactLimiter, validate({ body: contactBody }), route(async (req, res) => {
   const { name, email, orderRef, subject, message } = req.validated.body;
-  const id = `INQ-${Date.now()}`;
+  const id = `INQ-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
   const { rows } = await query(
     `INSERT INTO inquiries (public_id,type,name,email,order_ref,subject,message,status)
      VALUES ($1,'contact',$2,LOWER($3),$4,$5,$6,'Pending') RETURNING *`,
@@ -542,7 +542,7 @@ app.post('/api/contact', contactLimiter, validate({ body: contactBody }), route(
 
 app.post('/api/customization', customizationLimiter, validate({ body: customizationBody }), route(async (req, res) => {
   const { name, email, phone, garmentType, details } = req.validated.body;
-  const id = `TAILOR-${Date.now()}`;
+  const id = `TAILOR-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
   await query(
     `INSERT INTO inquiries (public_id,type,name,email,phone,garment_type,details,status)
      VALUES ($1,'customization',$2,LOWER($3),$4,$5,$6,'Pending Review')`,

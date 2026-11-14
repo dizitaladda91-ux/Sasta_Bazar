@@ -19,6 +19,7 @@ import { getStripe } from './services/stripe.js';
 import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from './services/orders.js';
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
+import { assertTopLevelStockAllowed, getIncomingVariants } from './services/productRules.js';
 import { requireCronSecret } from './middleware/cronAuth.js';
 import {
   generalLimiter, loginLimiter, registerLimiter, contactLimiter,
@@ -247,6 +248,11 @@ async function getOrders(where = '', values = [], pagination = null) {
 }
 
 async function createProduct(client, input) {
+  const price = Number(input.price);
+  const compareAtPrice = input.compareAtPrice ? Number(input.compareAtPrice) : null;
+  const incomingVariants = getIncomingVariants(input, price, compareAtPrice);
+  assertTopLevelStockAllowed(input.stock, incomingVariants.length);
+
   const parentName = input.category || 'Ladies Collection';
   const parentSlug = slugify(parentName) || 'uncategorized';
   const parent = await client.query(
@@ -264,8 +270,6 @@ async function createProduct(client, input) {
   );
   categoryId = child.rows[0].id;
 
-  const price = Number(input.price);
-  const compareAtPrice = input.compareAtPrice ? Number(input.compareAtPrice) : null;
   const discount = compareAtPrice > price ? Math.round((compareAtPrice - price) / compareAtPrice * 100) : 0;
   const images = Array.isArray(input.images) && input.images.length
     ? input.images
@@ -284,13 +288,6 @@ async function createProduct(client, input) {
       price, Number(input.stock) || 0, compareAtPrice, discount, images, sizes, colors, images[0], images[1] || images[0]]
   );
   const productId = result.rows[0].id;
-  const incomingVariants = Array.isArray(input.variants) && input.variants.length
-    ? input.variants
-    : sizes.length && colors.length
-      ? sizes.flatMap((size) => colors.map((color) => ({ title: `${size} / ${color}`, size, color, price, compareAtPrice })))
-      : sizes.length
-        ? sizes.map((size) => ({ title: size, size, price, compareAtPrice }))
-        : colors.map((color) => ({ title: color, color, price, compareAtPrice }));
   for (const [index, variant] of incomingVariants.entries()) {
     await client.query(
       `INSERT INTO variants (product_id, title, size, color, stock, price, compare_at_price, image_url)
@@ -795,12 +792,14 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
       if (fields.stock !== undefined) {
         const variants = await client.query('SELECT id FROM variants WHERE product_id=$1 ORDER BY id FOR UPDATE', [productId]);
         if (!variants.rowCount) throw Object.assign(new Error('Cannot set stock for a product without variants.'), { status: 409 });
+        assertTopLevelStockAllowed(fields.stock, variants.rowCount);
         for (const [index, variant] of variants.rows.entries()) {
           await client.query('UPDATE variants SET stock=$2 WHERE id=$1', [variant.id, index === 0 ? updated.stock : 0]);
         }
       }
     }
     if (Array.isArray(fields.variants)) {
+      assertTopLevelStockAllowed(fields.stock, fields.variants.length);
       const reserved = await client.query(
         `SELECT 1 FROM order_items item JOIN orders order_row ON order_row.id=item.order_id
          WHERE item.product_id=$1 AND order_row.payment_status='Pending' LIMIT 1`,

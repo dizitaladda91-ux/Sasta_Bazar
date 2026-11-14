@@ -527,8 +527,7 @@ app.get('/api/orders/:orderId', trackLimiter, optionalAuth,
   }));
 
 app.post('/api/contact', contactLimiter, validate({ body: contactBody }), route(async (req, res) => {
-  const { name, email, orderRef, subject, message } = req.body;
-  if (!name || !email || !message) return res.status(400).json({ success: false, message: 'Name, email, and message are required' });
+  const { name, email, orderRef, subject, message } = req.validated.body;
   const id = `INQ-${Date.now()}`;
   const { rows } = await query(
     `INSERT INTO inquiries (public_id,type,name,email,order_ref,subject,message,status)
@@ -542,8 +541,7 @@ app.post('/api/contact', contactLimiter, validate({ body: contactBody }), route(
 }));
 
 app.post('/api/customization', customizationLimiter, validate({ body: customizationBody }), route(async (req, res) => {
-  const { name, email, phone, garmentType, details } = req.body;
-  if (!name || !email || !details) return res.status(400).json({ success: false, message: 'Name, email, and tailoring details are required' });
+  const { name, email, phone, garmentType, details } = req.validated.body;
   const id = `TAILOR-${Date.now()}`;
   await query(
     `INSERT INTO inquiries (public_id,type,name,email,phone,garment_type,details,status)
@@ -555,8 +553,7 @@ app.post('/api/customization', customizationLimiter, validate({ body: customizat
 }));
 
 app.post('/api/newsletter', newsletterLimiter, validate({ body: newsletterBody }), route(async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  if (!email.includes('@')) return res.status(400).json({ success: false, message: 'Valid email address is required' });
+  const { email } = req.validated.body;
   const result = await query(
     `INSERT INTO subscribers (email,coupon_id,coupon_code)
      VALUES ($1,(SELECT id FROM coupons WHERE code='WELCOME10'),'WELCOME10')

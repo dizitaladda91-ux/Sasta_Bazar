@@ -746,7 +746,9 @@ app.use('/api/admin', requireAdmin);
 app.get('/api/admin/stats', route(async (_req, res) => {
   const { rows } = await query(`
     SELECT (SELECT COUNT(*) FROM products WHERE is_active=TRUE)::int AS total_products,
-      COUNT(*)::int AS total_orders,
+      COUNT(*) FILTER (
+        WHERE payment_status='Paid' OR order_status NOT IN ('Awaiting Payment','Cancelled')
+      )::int AS total_orders,
       COALESCE(SUM(total - refunded_amount) FILTER (WHERE payment_status='Paid'),0)::numeric AS total_sales,
       COUNT(*) FILTER (WHERE order_status='Processing')::int AS pending_orders,
       (SELECT COUNT(*) FROM subscribers WHERE is_active=TRUE)::int AS total_subscribers,

@@ -1,21 +1,91 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
-import bcrypt from 'bcrypt';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import bcrypt from 'bcryptjs';
 import { inTransaction, pool, query } from './db.js';
+import { clearAuthCookie, optionalAuth, requireAdmin, requireAuth, setAuthCookie } from './middleware/auth.js';
+import { validate } from './middleware/validate.js';
+import {
+  checkoutBody, contactBody, customizationBody, loginBody, newsletterBody, orderIdParams,
+  orderStatusBody, pageQuery, productCreateBody, productIdParams, productUpdateBody,
+  productsQuery, profileBody, refundBody, registerBody, trackingQuery
+} from './validators/index.js';
+import { getStripe } from './services/stripe.js';
+import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from './services/orders.js';
+import { issueOrderRefund } from './services/refunds.js';
+import { processStripeEvent } from './services/stripe-webhook.js';
+import { requireCronSecret } from './middleware/cronAuth.js';
+import {
+  generalLimiter, loginLimiter, registerLimiter, contactLimiter,
+  customizationLimiter, newsletterLimiter, trackLimiter, checkoutLimiter
+} from './middleware/ratelimit.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
-app.use(cors());
-app.use(express.json());
+
+app.set('trust proxy', 1);
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || allowedOrigins.includes(origin));
+  },
+  credentials: true
+}));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  strictTransportSecurity: process.env.NODE_ENV === 'production' ? undefined : false
+}));
+
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json', limit: '100kb' }), route(async (req, res) => {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ success: false, message: 'Stripe webhooks are not configured.' });
+  }
+  let event;
+  try {
+    event = getStripe().webhooks.constructEvent(req.body, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET);
+  } catch {
+    return res.status(400).json({ success: false, message: 'Invalid Stripe webhook signature.' });
+  }
+  const processed = await processStripeEvent(event);
+  return res.json({ received: true, duplicate: !processed });
+}));
+
+app.use(express.json({ limit: '100kb' }));
+app.use(cookieParser());
+app.use('/api', generalLimiter);
+
+app.post('/api/orders', (_req, res) => res.status(410).json({
+  success: false,
+  message: 'Order creation is only available through the secure Stripe checkout.'
+}));
 
 const toPublicId = (value) => /^\d+$/.test(String(value)) ? Number(value) : value;
 const money = (value) => Math.round(Number(value) * 100) / 100;
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const createOrderReference = () => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const bytes = crypto.randomBytes(5);
+  let value = 0;
+  let bits = 0;
+  let reference = '';
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      reference += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+      value &= (1 << bits) - 1;
+    }
+  }
+  return `SB-${reference}`;
+};
 const withoutImages = (value) => {
   if (Array.isArray(value)) return value.map(withoutImages);
   if (!value || typeof value !== 'object') return value;
@@ -24,19 +94,26 @@ const withoutImages = (value) => {
     .map(([key, entry]) => [key, withoutImages(entry)]));
 };
 
-async function getProducts(where = '', values = [], orderBy = '') {
+async function getProducts(where = '', values = [], orderBy = '', pagination = null) {
+  const queryValues = [...values];
+  let pageClause = '';
+  if (pagination) {
+    queryValues.push(pagination.limit, (pagination.page - 1) * pagination.limit);
+    pageClause = ` LIMIT $${queryValues.length - 1} OFFSET $${queryValues.length}`;
+  }
   const { rows } = await query(
     `SELECT p.id, p.external_id, p.handle, p.title, p.raw_title, p.category_id,
             p.subcategory, p.collection_slug, p.price, p.compare_at_price,
             p.discount_percent, p.currency, p.stock, p.description, p.sizes,
-            p.colors, p.vendor, p.is_best_seller, p.is_new_arrival,
+            p.colors, p.images, p.primary_image, p.hover_image, p.is_active,
+            p.vendor, p.is_best_seller, p.is_new_arrival,
             c.name AS subcategory_name,
             COALESCE(parent.name, c.name) AS category_name
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
      LEFT JOIN categories parent ON parent.id = c.parent_id
-     WHERE p.is_active = TRUE ${where} ${orderBy}`,
-    values
+     WHERE p.is_active = TRUE ${where} ${orderBy}${pageClause}`,
+    queryValues
   );
   if (!rows.length) return [];
   const variants = await query(
@@ -72,6 +149,10 @@ async function getProducts(where = '', values = [], orderBy = '') {
       stock: row.stock,
       available: row.stock > 0,
       description: row.description,
+      images: row.images,
+      primaryImage: row.primary_image,
+      hoverImage: row.hover_image,
+      isActive: row.is_active,
       sizes: row.sizes.length ? row.sizes : productVariants.map((variant) => variant.size).filter(Boolean),
       colors: row.colors.length ? row.colors : productVariants.map((variant) => variant.color).filter(Boolean),
       vendor: row.vendor,
@@ -82,21 +163,7 @@ async function getProducts(where = '', values = [], orderBy = '') {
   });
 }
 
-async function getOrder(orderId) {
-  const result = await query('SELECT * FROM orders WHERE LOWER(order_ref) = LOWER($1)', [orderId]);
-  if (!result.rowCount) return null;
-  const row = result.rows[0];
-  const itemRows = await query(
-    `SELECT item.id, item.product_id, item.variant_id, item.product_title, item.variant_title,
-            item.size, item.color, item.unit_price, item.quantity, item.line_total,
-            variant.external_id AS variant_external_id,
-            product.external_id AS product_external_id, product.handle AS product_handle
-     FROM order_items item
-     LEFT JOIN variants variant ON variant.id = item.variant_id
-     LEFT JOIN products product ON product.id = item.product_id
-     WHERE item.order_id = $1 ORDER BY item.id`,
-    [row.id]
-  );
+function formatOrder(row, itemRows) {
   return {
     orderId: row.order_ref,
     customer: {
@@ -107,7 +174,7 @@ async function getOrder(orderId) {
       city: row.shipping_city,
       postcode: row.shipping_postcode
     },
-    items: itemRows.rows.map((item) => ({
+    items: itemRows.map((item) => ({
       id: toPublicId(item.variant_external_id || item.product_external_id || item.variant_id || item.product_id),
       title: item.product_title,
       variantTitle: item.variant_title,
@@ -115,11 +182,13 @@ async function getOrder(orderId) {
       color: item.color,
       price: Number(item.unit_price),
       quantity: item.quantity,
+      image: item.image_url,
       handle: item.product_handle
     })),
     subtotal: Number(row.subtotal),
     shipping: Number(row.shipping),
     discount: Number(row.discount),
+    refundedAmount: Number(row.refunded_amount || 0),
     total: Number(row.total),
     currency: '£',
     paymentMethod: row.payment_method,
@@ -131,9 +200,50 @@ async function getOrder(orderId) {
   };
 }
 
-async function getOrders(where = '', values = []) {
-  const { rows } = await query(`SELECT order_ref FROM orders ${where} ORDER BY created_at DESC`, values);
-  return Promise.all(rows.map(({ order_ref }) => getOrder(order_ref)));
+async function getOrder(orderId) {
+  const result = await query('SELECT * FROM orders WHERE LOWER(order_ref) = LOWER($1)', [orderId]);
+  if (!result.rowCount) return null;
+  const itemRows = await query(
+    `SELECT item.id, item.order_id, item.product_id, item.variant_id, item.product_title, item.variant_title,
+            item.size, item.color, item.unit_price, item.quantity, item.line_total,
+            item.image_url,
+            variant.external_id AS variant_external_id,
+            product.external_id AS product_external_id, product.handle AS product_handle
+     FROM order_items item
+     LEFT JOIN variants variant ON variant.id = item.variant_id
+     LEFT JOIN products product ON product.id = item.product_id
+     WHERE item.order_id = $1 ORDER BY item.id`,
+    [result.rows[0].id]
+  );
+  return formatOrder(result.rows[0], itemRows.rows);
+}
+
+async function getOrders(where = '', values = [], pagination = null) {
+  const queryValues = [...values];
+  let pageClause = '';
+  if (pagination) {
+    queryValues.push(pagination.limit, (pagination.page - 1) * pagination.limit);
+    pageClause = ` LIMIT $${queryValues.length - 1} OFFSET $${queryValues.length}`;
+  }
+  const { rows } = await query(
+    `SELECT * FROM orders ${where} ORDER BY created_at DESC${pageClause}`,
+    queryValues
+  );
+  if (!rows.length) return [];
+  const itemRows = await query(
+    `SELECT item.id, item.order_id, item.product_id, item.variant_id, item.product_title, item.variant_title,
+            item.size, item.color, item.unit_price, item.quantity, item.line_total, item.image_url,
+            variant.external_id AS variant_external_id,
+            product.external_id AS product_external_id, product.handle AS product_handle
+     FROM order_items item
+     LEFT JOIN variants variant ON variant.id = item.variant_id
+     LEFT JOIN products product ON product.id = item.product_id
+     WHERE item.order_id = ANY($1::bigint[]) ORDER BY item.order_id, item.id`,
+    [rows.map((row) => row.id)]
+  );
+  const itemsByOrder = new Map(rows.map((row) => [String(row.id), []]));
+  for (const item of itemRows.rows) itemsByOrder.get(String(item.order_id)).push(item);
+  return rows.map((row) => formatOrder(row, itemsByOrder.get(String(row.id))));
 }
 
 async function createProduct(client, input) {
@@ -181,30 +291,31 @@ async function createProduct(client, input) {
       : sizes.length
         ? sizes.map((size) => ({ title: size, size, price, compareAtPrice }))
         : colors.map((color) => ({ title: color, color, price, compareAtPrice }));
-  for (const variant of incomingVariants) {
+  for (const [index, variant] of incomingVariants.entries()) {
     await client.query(
       `INSERT INTO variants (product_id, title, size, color, stock, price, compare_at_price, image_url)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [productId, variant.title || variant.size || variant.color || '', variant.size || null,
-        variant.color || null, Number(variant.stock ?? input.stock) || 0, Number(variant.price ?? price),
+        variant.color || null, Number(variant.stock ?? (index === 0 ? input.stock : 0)) || 0, Number(variant.price ?? price),
         variant.compareAtPrice ? Number(variant.compareAtPrice) : compareAtPrice, variant.image || null]
     );
   }
+  await syncProductStock(client, productId);
   return productId;
 }
 
-app.get('/api/products', route(async (req, res) => {
+app.get('/api/products', validate({ query: productsQuery }), route(async (req, res) => {
+  const { page, limit, category, subcategory, search, filter, sort, collection } = req.validated.query;
   const values = [];
   const filters = [];
   const addFilter = (sql, value) => {
     values.push(value);
     filters.push(sql.replace(/\?/g, `$${values.length}`));
   };
-  const { category, subcategory, search, filter, sort, limit } = req.query;
   if (search) addFilter(`(p.title ILIKE '%' || ? || '%' OR p.handle ILIKE '%' || ? || '%' OR c.name ILIKE '%' || ? || '%')`, search);
   if (category && category !== 'All') addFilter(`(c.name = ? OR parent.name = ?)`, category);
   if (subcategory) addFilter(`c.name = ?`, subcategory);
-  if (req.query.collection) addFilter(`p.collection_slug = ?`, req.query.collection);
+  if (collection) addFilter(`p.collection_slug = ?`, collection);
   if (filter === 'sale') filters.push('p.discount_percent > 0');
   if (filter === 'new') filters.push('p.is_new_arrival = TRUE');
   if (filter === 'best-seller') filters.push('p.is_best_seller = TRUE');
@@ -214,12 +325,32 @@ app.get('/api/products', route(async (req, res) => {
     discount: 'ORDER BY p.discount_percent DESC',
     newest: 'ORDER BY p.is_new_arrival DESC, p.created_at DESC'
   }[sort] || 'ORDER BY p.created_at DESC';
-  if (limit && Number.isInteger(Number(limit)) && Number(limit) > 0) {
-    values.push(Math.min(Number(limit), 500));
-    orderBy += ` LIMIT $${values.length}`;
-  }
-  const products = await getProducts(filters.length ? `AND ${filters.join(' AND ')}` : '', values, orderBy);
-  res.json({ success: true, count: products.length, products });
+  const where = filters.length ? `AND ${filters.join(' AND ')}` : '';
+  const count = await query(
+    `SELECT COUNT(DISTINCT p.id)::int AS total
+     FROM products p
+     LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN categories parent ON parent.id = c.parent_id
+     WHERE p.is_active = TRUE ${where}`,
+    values
+  );
+  const total = count.rows[0].total;
+  const paginated = page !== undefined;
+  const products = await getProducts(
+    where,
+    values,
+    orderBy,
+    paginated ? { page, limit: limit || 20 } : null
+  );
+  const response = {
+    success: true,
+    count: products.length,
+    total,
+    page: page || 1,
+    pages: paginated ? Math.max(1, Math.ceil(total / (limit || 20))) : 1,
+    products
+  };
+  res.json(response);
 }));
 
 app.get('/api/products/:handle', route(async (req, res) => {
@@ -247,80 +378,154 @@ app.get('/api/storefront/content/:key', route(async (req, res) => {
   res.json({ success: true, content: withoutImages(rows[0].content) });
 }));
 
-app.post('/api/orders', route(async (req, res) => {
-  const { customer, items, shippingMethod, promoCode, paymentMethod } = req.body;
-  if (!customer?.name || !customer?.email || !customer?.address) {
-    return res.status(400).json({ success: false, message: 'Missing required customer details (name, email, address)' });
+app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, validate({ body: checkoutBody }), route(async (req, res) => {
+  const { customer, items, promoCode } = req.validated.body;
+  const stripe = getStripe();
+  const createPendingOrder = async () => {
+    const orderRef = createOrderReference();
+    return inTransaction(async (client) => {
+      const variantsById = new Map();
+      for (const item of items) {
+        const productResult = await client.query(
+          `SELECT id, title, primary_image, is_active FROM products
+           WHERE external_id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+          [String(item.productId)]
+        );
+        if (!productResult.rowCount || !productResult.rows[0].is_active) {
+          throw Object.assign(new Error('A product in your bag is unavailable.'), { status: 409 });
+        }
+        const product = productResult.rows[0];
+        const variantResult = item.variantId == null
+          ? await client.query(
+              `SELECT id, title, size, color, stock, is_available, price
+               FROM variants WHERE product_id=$1 AND COALESCE(size,'')=$2 AND COALESCE(color,'')=$3
+               FOR UPDATE`,
+              [product.id, item.size || '', item.color || '']
+            )
+          : await client.query(
+              `SELECT id, title, size, color, stock, is_available, price
+               FROM variants WHERE product_id=$1 AND (external_id=$2 OR id::text=$2) FOR UPDATE`,
+              [product.id, String(item.variantId)]
+            );
+        if (!variantResult.rowCount) {
+          throw Object.assign(new Error('A selected product option is no longer available.'), { status: 409 });
+        }
+        const variant = variantResult.rows[0];
+        if (!variant.is_available) {
+          throw Object.assign(new Error(`${product.title} is no longer available.`), { status: 409 });
+        }
+        const key = String(variant.id);
+        const existing = variantsById.get(key);
+        if (existing) existing.quantity += item.quantity;
+        else variantsById.set(key, {
+          product, variant, quantity: item.quantity, unitPrice: Number(variant.price)
+        });
+      }
+
+      const resolvedItems = [...variantsById.values()];
+      for (const item of resolvedItems) {
+        if (item.variant.stock < item.quantity) {
+          throw Object.assign(new Error(`${item.product.title} does not have enough stock for that quantity.`), { status: 409 });
+        }
+      }
+      const subtotal = money(resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0));
+      const discount = promoCode?.toUpperCase() === 'WELCOME10' ? money(subtotal * 0.1) : 0;
+      const shipping = subtotal >= 40 ? 0 : 3.99;
+      const total = money(Math.max(0, subtotal - discount + shipping));
+      const inserted = await client.query(
+        `INSERT INTO orders
+          (order_ref,user_id,customer_name,customer_email,customer_phone,shipping_address,shipping_city,
+           shipping_postcode,subtotal,shipping,discount,total,payment_method,payment_status,order_status,courier)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Stripe','Pending','Awaiting Payment','Royal Mail Tracked 48')
+         RETURNING id`,
+        [orderRef, req.user?.id || null, customer.name, customer.email, customer.phone,
+          customer.address, customer.city, customer.postcode, subtotal, shipping, discount, total]
+      );
+      const orderId = inserted.rows[0].id;
+      const productIds = new Set();
+      for (const { product, variant, quantity, unitPrice } of resolvedItems) {
+        await client.query('UPDATE variants SET stock=stock-$2 WHERE id=$1', [variant.id, quantity]);
+        productIds.add(String(product.id));
+        await client.query(
+          `INSERT INTO order_items
+            (order_id,product_id,variant_id,product_title,variant_title,size,color,image_url,unit_price,quantity,line_total)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [orderId, product.id, variant.id, product.title, variant.title || '',
+            variant.size || '', variant.color || '', product.primary_image || '',
+            unitPrice, quantity, money(unitPrice * quantity)]
+        );
+      }
+      for (const productId of productIds) await syncProductStock(client, productId);
+      return { id: orderId, orderRef, total };
+    });
+  };
+
+  let pendingOrder;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      pendingOrder = await createPendingOrder();
+      break;
+    } catch (error) {
+      if (error.code !== '23505' || error.constraint !== 'orders_order_ref_key' || attempt === 2) throw error;
+    }
   }
-  if (!Array.isArray(items) || !items.length) return res.status(400).json({ success: false, message: 'Cannot place an empty order' });
-  const orderRef = `SB-${Math.floor(100000 + Math.random() * 900000)}`;
-  await inTransaction(async (client) => {
-    const resolvedItems = [];
-    for (const item of items) {
-      const quantity = Number(item.quantity);
-      if (!Number.isInteger(quantity) || quantity < 1) throw Object.assign(new Error('Invalid item quantity.'), { status: 400 });
-      const productResult = await client.query(
-      `SELECT id, title, price, stock, is_active FROM products
-         WHERE external_id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
-        [String(item.productId ?? item.id ?? '')]
-      );
-      if (!productResult.rowCount || !productResult.rows[0].is_active) throw Object.assign(new Error('A product in your bag is unavailable.'), { status: 409 });
-      const product = productResult.rows[0];
-      const variantResult = item.variantId == null
-        ? await client.query(
-            `SELECT id, external_id, product_id, title, size, color, stock, is_available, price, compare_at_price
-             FROM variants WHERE product_id=$1 AND COALESCE(size,'')=$2 AND COALESCE(color,'')=$3 FOR UPDATE`,
-            [product.id, item.size || '', item.color || '']
-          )
-        : await client.query(
-            `SELECT id, external_id, product_id, title, size, color, stock, is_available, price, compare_at_price
-             FROM variants WHERE product_id=$1 AND (external_id=$2 OR id::text=$2) FOR UPDATE`,
-            [product.id, String(item.variantId)]
-          );
-      if (!variantResult.rowCount) throw Object.assign(new Error('A selected product option is no longer available.'), { status: 409 });
-      const variant = variantResult.rows[0];
-      if (!variant.is_available || product.stock < quantity) throw Object.assign(new Error(`${product.title} does not have enough stock for that quantity.`), { status: 409 });
-      const unitPrice = Number(variant.price);
-      resolvedItems.push({ item, product, variant, quantity, unitPrice });
-      await client.query('UPDATE products SET stock=stock-$2, updated_at=NOW() WHERE id=$1', [product.id, quantity]);
+
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(pendingOrder.total * 100),
+      currency: 'gbp',
+      automatic_payment_methods: { enabled: true },
+      receipt_email: customer.email,
+      metadata: { order_ref: pendingOrder.orderRef }
+    }, { idempotencyKey: pendingOrder.orderRef });
+    await query('UPDATE orders SET stripe_payment_intent_id=$2 WHERE id=$1', [pendingOrder.id, paymentIntent.id]);
+  } catch (error) {
+    if (paymentIntent) {
+      try {
+        await stripe.paymentIntents.cancel(paymentIntent.id);
+      } catch (cancelError) {
+        console.error('Unable to cancel an unreturned Stripe payment intent.');
+        throw error;
+      }
     }
-    const subtotal = money(resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0));
-    const discount = promoCode?.toUpperCase() === 'WELCOME10' ? money(subtotal * 0.1) : 0;
-    const shipping = subtotal >= 40 || shippingMethod === 'free' ? 0 : 3.99;
-    const total = Math.max(0, money(subtotal - discount + shipping));
-    const user = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [customer.email]);
-    const inserted = await client.query(
-      `INSERT INTO orders
-        (order_ref,user_id,customer_name,customer_email,customer_phone,shipping_address,shipping_city,
-         shipping_postcode,subtotal,shipping,discount,total,payment_method,payment_status,order_status,tracking_number,courier)
-       VALUES ($1,$2,$3,LOWER($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,'Paid','Processing',$14,'Royal Mail Tracked 48')
-       RETURNING id`,
-      [orderRef, user.rows[0]?.id || null, customer.name, customer.email, customer.phone || '',
-        customer.address, customer.city || '', customer.postcode || '', subtotal, shipping, discount, total,
-        paymentMethod || 'Online Card Payment', `RM${Math.floor(10000000 + Math.random() * 90000000)}GB`]
-    );
-    for (const { item, product, variant, quantity, unitPrice } of resolvedItems) {
+    await inTransaction(async (client) => {
       await client.query(
-        `INSERT INTO order_items
-          (order_id,product_id,variant_id,product_title,variant_title,size,color,image_url,unit_price,quantity,line_total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [inserted.rows[0].id, product.id, variant.id,
-          product.title, variant.title || item.size || item.color || '', variant.size || '',
-          variant.color || '', '', unitPrice, quantity, money(unitPrice * quantity)]
+        `UPDATE orders SET payment_status='Failed', order_status='Cancelled' WHERE id=$1 AND payment_status='Pending'`,
+        [pendingOrder.id]
       );
-    }
+      await restoreOrderReservation(client, pendingOrder.id);
+    });
+    throw error;
+  }
+
+  return res.status(201).json({
+    success: true,
+    clientSecret: paymentIntent.client_secret,
+    orderId: pendingOrder.orderRef,
+    total: pendingOrder.total
   });
-  const order = await getOrder(orderRef);
-  res.status(201).json({ success: true, message: 'Order created successfully', order });
 }));
 
-app.get('/api/orders/:orderId', route(async (req, res) => {
-  const order = await getOrder(req.params.orderId);
-  if (!order) return res.status(404).json({ success: false, message: `Order reference "${req.params.orderId}" not found` });
-  res.json({ success: true, order });
-}));
+app.get('/api/orders/:orderId', trackLimiter, optionalAuth,
+  validate({ params: orderIdParams, query: trackingQuery }), route(async (req, res) => {
+    const { orderId } = req.validated.params;
+    const { rows } = await query(
+      'SELECT id, user_id, customer_email FROM orders WHERE LOWER(order_ref)=LOWER($1)',
+      [orderId]
+    );
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Order not found.' });
+    const orderRecord = rows[0];
+    const isOwner = req.user && String(req.user.id) === String(orderRecord.user_id);
+    const hasMatchingEmail = req.validated.query.email
+      && orderRecord.customer_email.toLowerCase() === req.validated.query.email;
+    if (!isOwner && !hasMatchingEmail) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    return res.json({ success: true, order: await getOrder(orderId) });
+  }));
 
-app.post('/api/contact', route(async (req, res) => {
+app.post('/api/contact', contactLimiter, validate({ body: contactBody }), route(async (req, res) => {
   const { name, email, orderRef, subject, message } = req.body;
   if (!name || !email || !message) return res.status(400).json({ success: false, message: 'Name, email, and message are required' });
   const id = `INQ-${Date.now()}`;
@@ -335,7 +540,7 @@ app.post('/api/contact', route(async (req, res) => {
   } });
 }));
 
-app.post('/api/customization', route(async (req, res) => {
+app.post('/api/customization', customizationLimiter, validate({ body: customizationBody }), route(async (req, res) => {
   const { name, email, phone, garmentType, details } = req.body;
   if (!name || !email || !details) return res.status(400).json({ success: false, message: 'Name, email, and tailoring details are required' });
   const id = `TAILOR-${Date.now()}`;
@@ -348,7 +553,7 @@ app.post('/api/customization', route(async (req, res) => {
     request: { id, type: 'customization', name, email, phone: phone || '', garmentType: garmentType || 'Suit Alteration', details, status: 'Pending Review', createdAt: new Date().toISOString() } });
 }));
 
-app.post('/api/newsletter', route(async (req, res) => {
+app.post('/api/newsletter', newsletterLimiter, validate({ body: newsletterBody }), route(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   if (!email.includes('@')) return res.status(400).json({ success: false, message: 'Valid email address is required' });
   const result = await query(
@@ -388,17 +593,25 @@ async function userWithAddress(email) {
   );
 }
 
-app.post('/api/auth/register', route(async (req, res) => {
-  const { name, email, password, phone, newsletter } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password are required' });
-  const normalizedEmail = email.toLowerCase().trim();
+async function userWithAddressById(userId) {
+  return query(
+    `SELECT u.*, a.street, a.city, a.postal_code, a.country
+     FROM users u LEFT JOIN LATERAL
+       (SELECT * FROM addresses WHERE user_id = u.id ORDER BY is_default DESC, id LIMIT 1) a ON TRUE
+     WHERE u.id = $1`,
+    [userId]
+  );
+}
+
+app.post('/api/auth/register', registerLimiter, validate({ body: registerBody }), route(async (req, res) => {
+  const { name, email: normalizedEmail, password, phone, newsletter } = req.validated.body;
   const passwordHash = await bcrypt.hash(password, 12);
   try {
     const result = await inTransaction(async (client) => {
       const inserted = await client.query(
         `INSERT INTO users (public_id,name,email,password_hash,phone)
          VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [`USR-${Date.now().toString().slice(-6)}`, name.trim(), normalizedEmail, passwordHash, phone?.trim() || '']
+        [`USR-${crypto.randomBytes(6).toString('hex').toUpperCase()}`, name, normalizedEmail, passwordHash, phone || '']
       );
       const user = inserted.rows[0];
       await client.query(
@@ -415,6 +628,7 @@ app.post('/api/auth/register', route(async (req, res) => {
       return user;
     });
     const { rows } = await userWithAddress(result.email);
+    setAuthCookie(res, result);
     res.status(201).json({ success: true, message: 'Welcome to Sasta Bazaar! Your account has been created.',
       user: safeUser(rows[0], rows[0].street == null ? null : rows[0]), couponCode: 'WELCOME10' });
   } catch (error) {
@@ -423,30 +637,39 @@ app.post('/api/auth/register', route(async (req, res) => {
   }
 }));
 
-app.post('/api/auth/login', route(async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password are required' });
-  const { rows } = await userWithAddress(email.toLowerCase().trim());
+app.post('/api/auth/login', loginLimiter, validate({ body: loginBody }), route(async (req, res) => {
+  const { email, password } = req.validated.body;
+  const { rows } = await userWithAddress(email);
   if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
-    return res.status(401).json({ success: false, message: 'Invalid email or password. Please check your credentials.' });
+    return res.status(401).json({ success: false, message: 'Invalid email or password.' });
   }
+  setAuthCookie(res, rows[0]);
   res.json({ success: true, message: 'Signed in successfully!', user: safeUser(rows[0], rows[0].street == null ? null : rows[0]) });
 }));
 
-app.get('/api/auth/profile', route(async (req, res) => {
-  if (!req.query.email) return res.status(400).json({ success: false, message: 'Email query parameter required' });
-  const { rows } = await userWithAddress(String(req.query.email).toLowerCase().trim());
-  if (!rows.length) return res.status(404).json({ success: false, message: 'User not found' });
-  res.json({ success: true, user: safeUser(rows[0], rows[0].street == null ? null : rows[0]) });
+app.post('/api/auth/logout', (_req, res) => {
+  clearAuthCookie(res);
+  res.json({ success: true, message: 'Signed out successfully.' });
+});
+
+app.get('/api/auth/me', requireAuth, route(async (req, res) => {
+  const { rows } = await userWithAddressById(req.user.id);
+  if (!rows.length) return res.status(401).json({ success: false, message: 'Authentication is required.' });
+  return res.json({ success: true, user: safeUser(rows[0], rows[0].street == null ? null : rows[0]) });
 }));
 
-app.put('/api/auth/profile', route(async (req, res) => {
-  const { email, name, phone, address } = req.body;
-  if (!email) return res.status(400).json({ success: false, message: 'User email is required' });
+app.get('/api/auth/profile', requireAuth, route(async (req, res) => {
+  const { rows } = await userWithAddressById(req.user.id);
+  if (!rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
+  return res.json({ success: true, user: safeUser(rows[0], rows[0].street == null ? null : rows[0]) });
+}));
+
+app.put('/api/auth/profile', requireAuth, validate({ body: profileBody }), route(async (req, res) => {
+  const { name, phone, address } = req.validated.body;
   const updated = await inTransaction(async (client) => {
     const user = await client.query(
       `UPDATE users SET name=COALESCE($2,name), phone=COALESCE($3,phone), updated_at=NOW()
-       WHERE LOWER(email)=LOWER($1) RETURNING *`, [email.trim(), name?.trim() ?? null, phone?.trim() ?? null]
+       WHERE id=$1 RETURNING *`, [req.user.id, name ?? null, phone ?? null]
     );
     if (!user.rowCount) return null;
     if (address) {
@@ -460,19 +683,26 @@ app.put('/api/auth/profile', route(async (req, res) => {
     return user.rows[0];
   });
   if (!updated) return res.status(404).json({ success: false, message: 'User not found' });
-  const { rows } = await userWithAddress(updated.email);
+  const { rows } = await userWithAddressById(updated.id);
   res.json({ success: true, message: 'Profile updated successfully', user: safeUser(rows[0], rows[0]) });
 }));
 
-app.get('/api/auth/orders', route(async (req, res) => {
-  if (!req.query.email) return res.status(400).json({ success: false, message: 'Email is required' });
-  res.json({ success: true, orders: await getOrders('WHERE LOWER(customer_email)=LOWER($1)', [String(req.query.email).trim()]) });
+app.get('/api/auth/orders', requireAuth, route(async (req, res) => {
+  return res.json({ success: true, orders: await getOrders('WHERE user_id=$1', [req.user.id]) });
 }));
+
+app.get('/api/cron/release-stale-orders', requireCronSecret, route(async (_req, res) => {
+  const summary = await releaseStaleOrders();
+  return res.json({ success: true, ...summary });
+}));
+
+app.use('/api/admin', requireAdmin);
 
 app.get('/api/admin/stats', route(async (_req, res) => {
   const { rows } = await query(`
     SELECT (SELECT COUNT(*) FROM products WHERE is_active=TRUE)::int AS total_products,
-      COUNT(*)::int AS total_orders, COALESCE(SUM(total),0)::numeric AS total_sales,
+      COUNT(*)::int AS total_orders,
+      COALESCE(SUM(total - refunded_amount) FILTER (WHERE payment_status='Paid'),0)::numeric AS total_sales,
       COUNT(*) FILTER (WHERE order_status='Processing')::int AS pending_orders,
       (SELECT COUNT(*) FROM subscribers WHERE is_active=TRUE)::int AS total_subscribers,
       (SELECT COUNT(*) FROM inquiries)::int AS total_inquiries
@@ -485,39 +715,58 @@ app.get('/api/admin/stats', route(async (_req, res) => {
   } });
 }));
 
-app.get('/api/admin/orders', route(async (_req, res) => res.json({ success: true, orders: await getOrders() })));
+app.get('/api/admin/orders', validate({ query: pageQuery }), route(async (req, res) => {
+  const { page, limit } = req.validated.query;
+  const count = await query('SELECT COUNT(*)::int AS total FROM orders');
+  const total = count.rows[0].total;
+  const orders = await getOrders('', [], { page, limit });
+  res.json({ success: true, orders, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
+}));
 
-app.patch('/api/admin/orders/:orderId', route(async (req, res) => {
-  const { orderStatus, trackingNumber, courier } = req.body;
+app.patch('/api/admin/orders/:orderId', validate({ params: orderIdParams, body: orderStatusBody }), route(async (req, res) => {
+  const { orderStatus, trackingNumber, courier } = req.validated.body;
   const result = await query(
     `UPDATE orders SET order_status=COALESCE($2,order_status), tracking_number=COALESCE($3,tracking_number),
        courier=COALESCE($4,courier) WHERE LOWER(order_ref)=LOWER($1)`,
-    [req.params.orderId, orderStatus || null, trackingNumber || null, courier || null]
+    [req.validated.params.orderId, orderStatus || null, trackingNumber || null, courier || null]
   );
   if (!result.rowCount) return res.status(404).json({ success: false, message: 'Order not found' });
-  res.json({ success: true, message: 'Order status updated', order: await getOrder(req.params.orderId) });
+  res.json({ success: true, message: 'Order status updated', order: await getOrder(req.validated.params.orderId) });
 }));
 
-app.post('/api/admin/products', route(async (req, res) => {
-  const { title, price } = req.body;
-  if (!title || !price || !Number.isFinite(Number(price))) return res.status(400).json({ success: false, message: 'Title and price are required' });
-  const productId = await inTransaction((client) => createProduct(client, req.body));
+app.post('/api/admin/products', validate({ body: productCreateBody }), route(async (req, res) => {
+  const productId = await inTransaction((client) => createProduct(client, req.validated.body));
   const product = (await getProducts('AND p.id=$1', [productId]))[0];
   res.status(201).json({ success: true, message: 'Product added successfully', product });
 }));
 
-app.put('/api/admin/products/:id', route(async (req, res) => {
+app.put('/api/admin/products/:id', validate({ params: productIdParams, body: productUpdateBody }), route(async (req, res) => {
   const productResult = await query(
-    'SELECT id FROM products WHERE external_id=$1 OR id::text=$1 LIMIT 1', [req.params.id]
+    'SELECT id FROM products WHERE external_id=$1 OR id::text=$1 LIMIT 1', [req.validated.params.id]
   );
   if (!productResult.rowCount) return res.status(404).json({ success: false, message: 'Product not found' });
   const productId = productResult.rows[0].id;
   const existing = (await getProducts('AND p.id=$1', [productId]))[0];
   if (!existing) return res.status(404).json({ success: false, message: 'Product not found' });
-  const updated = { ...existing, ...req.body };
+  const fields = req.validated.body;
+  const updated = {
+    title: fields.title ?? existing.title,
+    description: fields.description ?? existing.description,
+    price: fields.price ?? existing.price,
+    compareAtPrice: fields.compareAtPrice === undefined ? existing.compareAtPrice : fields.compareAtPrice,
+    stock: fields.stock ?? existing.stock,
+    category: fields.category ?? existing.category,
+    subcategory: fields.subcategory ?? existing.subcategory,
+    images: fields.images ?? existing.images,
+    sizes: fields.sizes ?? existing.sizes,
+    colors: fields.colors ?? existing.colors,
+    isBestSeller: fields.isBestSeller ?? existing.isBestSeller,
+    isNewArrival: fields.isNewArrival ?? existing.isNewArrival,
+    isActive: fields.isActive ?? existing.isActive
+  };
   await inTransaction(async (client) => {
     const price = Number(updated.price);
-    const compareAtPrice = updated.compareAtPrice ? Number(updated.compareAtPrice) : null;
+    const compareAtPrice = updated.compareAtPrice == null ? null : Number(updated.compareAtPrice);
     const discount = compareAtPrice > price ? Math.round((compareAtPrice - price) / compareAtPrice * 100) : 0;
     const categoryName = updated.category || existing.category;
     const category = await client.query(
@@ -534,30 +783,63 @@ app.put('/api/admin/products/:id', route(async (req, res) => {
     await client.query(
       `UPDATE products SET title=$2,raw_title=$3,description=$4,price=$5,stock=$6,compare_at_price=$7,
         discount_percent=$8,images=$9,sizes=$10,colors=$11,primary_image=$12,hover_image=$13,is_best_seller=$14,
-        is_new_arrival=$15,category_id=$16,subcategory=$17,updated_at=NOW()
+        is_new_arrival=$15,category_id=$16,subcategory=$17,is_active=$18,updated_at=NOW()
        WHERE id=$1`,
-      [productId, updated.title, updated.rawTitle || updated.title, updated.description || '',
+      [productId, updated.title, updated.title, updated.description || '',
         price, Number(updated.stock) || 0, compareAtPrice, discount, updated.images || [], updated.sizes || [], updated.colors || [],
-        updated.primaryImage || '', updated.hoverImage || '', Boolean(updated.isBestSeller),
-        Boolean(updated.isNewArrival), categoryId, updated.subcategory || '']
+        updated.images?.[0] || '', updated.images?.[1] || updated.images?.[0] || '', Boolean(updated.isBestSeller),
+        Boolean(updated.isNewArrival), categoryId, updated.subcategory || '', Boolean(updated.isActive)]
     );
-    if (!Array.isArray(req.body.variants)) {
+    if (!Array.isArray(fields.variants)) {
       await client.query('UPDATE variants SET price=$2,compare_at_price=$3 WHERE product_id=$1', [productId, price, compareAtPrice]);
+      if (fields.stock !== undefined) {
+        const variants = await client.query('SELECT id FROM variants WHERE product_id=$1 ORDER BY id FOR UPDATE', [productId]);
+        if (!variants.rowCount) throw Object.assign(new Error('Cannot set stock for a product without variants.'), { status: 409 });
+        for (const [index, variant] of variants.rows.entries()) {
+          await client.query('UPDATE variants SET stock=$2 WHERE id=$1', [variant.id, index === 0 ? updated.stock : 0]);
+        }
+      }
     }
-    if (Array.isArray(req.body.variants)) {
+    if (Array.isArray(fields.variants)) {
+      const reserved = await client.query(
+        `SELECT 1 FROM order_items item JOIN orders order_row ON order_row.id=item.order_id
+         WHERE item.product_id=$1 AND order_row.payment_status='Pending' LIMIT 1`,
+        [productId]
+      );
+      if (reserved.rowCount) {
+        throw Object.assign(new Error('Variants cannot be replaced while payment is pending for this product.'), { status: 409 });
+      }
       await client.query('DELETE FROM variants WHERE product_id=$1', [productId]);
-      for (const variant of req.body.variants) {
+      for (const variant of fields.variants) {
         await client.query(
           `INSERT INTO variants (product_id,title,size,color,stock,is_available,price,compare_at_price,image_url)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [productId, variant.title || '', variant.size || null, variant.color || null, Number(variant.stock) || 0,
-            variant.available !== false, Number(variant.price ?? price), variant.compareAtPrice || null, variant.image || null]
+            variant.available !== false, Number(variant.price ?? price), variant.compareAtPrice ?? null, variant.image || null]
         );
       }
     }
+    await syncProductStock(client, productId);
   });
   const product = (await getProducts('AND p.id=$1', [productId]))[0];
   res.json({ success: true, message: 'Product updated successfully', product });
+}));
+
+app.post('/api/admin/orders/:orderId/refund',
+  validate({ params: orderIdParams, body: refundBody }), route(async (req, res) => {
+  const result = await issueOrderRefund(req.validated.params.orderId, req.validated.body);
+  if (result.error) {
+    return res.status(result.error.status).json({ success: false, message: result.error.message });
+  }
+  return res.json({
+    success: true,
+    message: result.duplicate
+      ? 'This refund was already processed.'
+      : result.fullyRefunded ? 'Full refund initiated successfully.' : 'Partial refund initiated successfully.',
+    refundId: result.refundId,
+    amount: result.amount,
+    fullyRefunded: result.fullyRefunded
+  });
 }));
 
 app.delete('/api/admin/products/:id', route(async (req, res) => {
@@ -569,23 +851,40 @@ app.delete('/api/admin/products/:id', route(async (req, res) => {
   res.json({ success: true, message: 'Product deleted successfully' });
 }));
 
-app.get('/api/admin/inquiries', route(async (_req, res) => {
-  const { rows } = await query('SELECT * FROM inquiries ORDER BY created_at DESC');
+app.get('/api/admin/inquiries', validate({ query: pageQuery }), route(async (req, res) => {
+  const { page, limit } = req.validated.query;
+  const count = await query('SELECT COUNT(*)::int AS total FROM inquiries');
+  const total = count.rows[0].total;
+  const { rows } = await query(
+    'SELECT * FROM inquiries ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+    [limit, (page - 1) * limit]
+  );
   res.json({ success: true, inquiries: rows.map((row) => ({
     id: row.public_id, type: row.type, name: row.name, email: row.email, phone: row.phone,
     orderRef: row.order_ref, subject: row.subject, message: row.message, garmentType: row.garment_type,
     details: row.details, status: row.status, createdAt: row.created_at
-  })) });
+  }  )), total, page, pages: Math.max(1, Math.ceil(total / limit)) });
 }));
 
-app.get('/api/admin/subscribers', route(async (_req, res) => {
-  const { rows } = await query('SELECT id,email,coupon_code AS "couponCode",created_at AS "createdAt" FROM subscribers WHERE is_active=TRUE ORDER BY created_at DESC');
-  res.json({ success: true, subscribers: rows });
+app.get('/api/admin/subscribers', validate({ query: pageQuery }), route(async (req, res) => {
+  const { page, limit } = req.validated.query;
+  const count = await query('SELECT COUNT(*)::int AS total FROM subscribers WHERE is_active=TRUE');
+  const total = count.rows[0].total;
+  const { rows } = await query(
+    `SELECT id,email,coupon_code AS "couponCode",created_at AS "createdAt"
+     FROM subscribers WHERE is_active=TRUE ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+    [limit, (page - 1) * limit]
+  );
+  res.json({ success: true, subscribers: rows, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
 }));
 
 app.use((error, _req, res, _next) => {
   console.error('API request failed:', error);
-  res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'Internal server error' });
+  const status = error.status || 500;
+  const message = status < 500
+    ? error.message
+    : process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message;
+  res.status(status).json({ success: false, message });
 });
 
 export default app;

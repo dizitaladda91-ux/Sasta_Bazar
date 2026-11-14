@@ -1,8 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { inTransaction, pool, query } from '../server/db.js';
 import { CATEGORIES, SIGNATURE_COLLECTIONS } from '../src/data/categories.js';
 
@@ -148,9 +147,10 @@ try {
 
     const users = await readJson('server/data/users.json');
     for (const user of users) {
+      if (!user.password || user.password === 'password123') continue;
       const passwordHash = /^\$2[aby]\$/.test(user.password || '')
         ? user.password
-        : await bcrypt.hash(user.password || crypto.randomBytes(32).toString('hex'), 12);
+        : await bcrypt.hash(user.password, 12);
       const result = await client.query(
         `INSERT INTO users (public_id, name, email, password_hash, phone, role, created_at)
          VALUES ($1, $2, LOWER($3), $4, $5, $6, COALESCE($7::timestamptz, NOW()))

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -10,12 +10,88 @@ import {
   Truck,
   CheckCircle,
   Tag,
-  CreditCard,
   Lock
 } from 'lucide-react';
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+
+const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+
+function StripePaymentForm({ orderId, total, onSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const recoveredSecret = React.useRef('');
+  const successHandler = React.useRef(onSuccess);
+  successHandler.current = onSuccess;
+
+  useEffect(() => {
+    const secret = new URLSearchParams(window.location.search).get('payment_intent_client_secret');
+    if (!stripe || !secret || recoveredSecret.current === secret) return;
+    recoveredSecret.current = secret;
+    stripe.retrievePaymentIntent(secret).then(({ paymentIntent, error: retrieveError }) => {
+      if (retrieveError) setError(retrieveError.message || 'Unable to verify the payment.');
+      else if (paymentIntent?.status === 'succeeded') successHandler.current(paymentIntent);
+    }).catch(() => setError('Unable to verify the payment. Please contact store support.'));
+  }, [stripe]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError('');
+    let result;
+    try {
+      result = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/cart?orderId=${encodeURIComponent(orderId)}`
+        },
+        redirect: 'if_required'
+      });
+    } catch {
+      setSubmitting(false);
+      setError('Payment could not be completed. Please try again.');
+      return;
+    }
+    setSubmitting(false);
+    if (result.error) {
+      setError(result.error.message || 'Payment could not be completed.');
+      return;
+    }
+    if (result.paymentIntent?.status === 'succeeded') {
+      successHandler.current(result.paymentIntent);
+    } else if (result.paymentIntent?.status === 'processing') {
+      setError('Your payment is processing. Please wait for confirmation before trying again.');
+    } else {
+      setError('Payment was not completed. Please check your payment details and try again.');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+      <PaymentElement />
+      {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{error}</p>}
+      <div className="flex justify-between border-t border-sasta-border pt-3 font-bold text-sm">
+        <span>Total to Pay</span>
+        <span>£{total.toFixed(2)}</span>
+      </div>
+      <button
+        type="submit"
+        disabled={!stripe || !elements || submitting}
+        className="w-full bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading font-bold text-xs uppercase tracking-wider py-3.5 rounded shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+      >
+        <Lock className="w-4 h-4" />
+        <span>{submitting ? 'Processing Payment...' : `Pay £${total.toFixed(2)}`}</span>
+      </button>
+    </form>
+  );
+}
 
 export default function CartPage() {
   const {
@@ -34,6 +110,8 @@ export default function CartPage() {
   const [checkoutStep, setCheckoutStep] = useState('cart'); // 'cart', 'checkout', 'confirmed'
   const [confirmedOrder, setConfirmedOrder] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
+  const [payment, setPayment] = useState(null);
 
   // Customer Checkout Details
   const { user } = useAuth();
@@ -60,6 +138,16 @@ export default function CartPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const clientSecret = params.get('payment_intent_client_secret');
+    const orderId = params.get('orderId');
+    if (clientSecret && orderId) {
+      setPayment({ clientSecret, orderId, total: 0 });
+      setCheckoutStep('checkout');
+    }
+  }, []);
+
   const applyPromo = (e) => {
     e.preventDefault();
     if (promoCode.trim().toUpperCase() === 'WELCOME10') {
@@ -77,31 +165,39 @@ export default function CartPage() {
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
-    if (!customer.name || !customer.email || !customer.address) {
-      alert('Please fill in your name, email and delivery address.');
-      return;
-    }
-
+    setCheckoutError('');
     setLoading(true);
-    const orderPayload = {
-      customer,
-      items: cartItems,
-      subtotal,
-      discount: discountAmount,
-      shippingMethod: shippingCost === 0 ? 'free' : 'standard',
-      promoCode,
-      paymentMethod: 'Credit / Debit Card (Verified Checkout)'
-    };
-
-    const res = await api.createOrder(orderPayload);
-    setLoading(false);
-
-    if (res.success && res.order) {
-      setConfirmedOrder(res.order);
-      setCheckoutStep('confirmed');
-      clearCart();
+    try {
+      const result = await api.createPaymentIntent({
+        customer,
+        items: cartItems.map((item) => ({
+          productId: item.id,
+          variantId: item.variantId,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity
+        })),
+        promoCode,
+        shippingMethod: freeShippingRemaining <= 0 ? 'free' : 'standard'
+      });
+      setPayment({ clientSecret: result.clientSecret, orderId: result.orderId, total: result.total });
+    } catch (error) {
+      setCheckoutError(error.message || 'Unable to start secure checkout. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handlePaymentSuccess = useCallback((paymentIntent) => {
+    setConfirmedOrder({
+      orderId: payment?.orderId || new URLSearchParams(window.location.search).get('orderId'),
+      total: (paymentIntent.amount_received || paymentIntent.amount || Math.round(payment?.total * 100)) / 100,
+      customer
+    });
+    setCheckoutStep('confirmed');
+    clearCart();
+    window.history.replaceState({}, '', '/cart');
+  }, [payment, customer, clearCart]);
 
   return (
     <div className="bg-white min-h-screen py-10 sm:py-16">
@@ -123,7 +219,7 @@ export default function CartPage() {
               Thank You, {confirmedOrder.customer?.name}!
             </h2>
             <p className="text-xs sm:text-sm text-sasta-body leading-relaxed">
-              Your order has been recorded into the custom Sasta Bazaar database. Our dispatch team is preparing your tracked UK delivery.
+              Your payment is confirmed. We will prepare your tracked UK delivery shortly.
             </p>
             <div className="p-4 bg-white rounded-lg border border-sasta-border text-xs space-y-1 text-left">
               <div className="flex justify-between">
@@ -142,7 +238,7 @@ export default function CartPage() {
 
             <div className="pt-2 flex flex-col gap-2.5">
               <Link
-                to={`/track-order?id=${confirmedOrder.orderId}`}
+                to={`/track-order?id=${encodeURIComponent(confirmedOrder.orderId)}&email=${encodeURIComponent(confirmedOrder.customer?.email || '')}`}
                 className="w-full bg-sasta-navy hover:bg-sasta-navy-light text-white text-xs font-bold uppercase tracking-wider py-3 rounded-md shadow-xs transition-colors"
               >
                 Track Live Order Status &rarr;
@@ -164,15 +260,17 @@ export default function CartPage() {
               <h3 className="font-serif font-bold text-lg text-sasta-heading">
                 Delivery &amp; Contact Information
               </h3>
-              <button
-                onClick={() => setCheckoutStep('cart')}
-                className="text-xs text-sasta-gold-dark font-semibold hover:underline"
-              >
-                &larr; Back to Bag
-              </button>
+              {!payment && (
+                <button
+                  onClick={() => setCheckoutStep('cart')}
+                  className="text-xs text-sasta-gold-dark font-semibold hover:underline"
+                >
+                  &larr; Back to Bag
+                </button>
+              )}
             </div>
 
-            <form onSubmit={handlePlaceOrder} className="space-y-4 text-xs">
+            {!payment ? <form onSubmit={handlePlaceOrder} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold mb-1">Full Name *</label>
@@ -268,15 +366,27 @@ export default function CartPage() {
                 </div>
               </div>
 
+              {checkoutError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{checkoutError}</p>}
+              {!stripePromise && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">Secure card payments are not configured. Please contact store support.</p>}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !stripePromise}
                 className="w-full bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading font-bold text-xs uppercase tracking-wider py-3.5 rounded shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Lock className="w-4 h-4" />
-                <span>{loading ? 'Processing Order...' : `Complete Order & Pay £${grandTotal.toFixed(2)}`}</span>
+                <span>{loading ? 'Preparing Secure Payment...' : 'Continue to Secure Payment'}</span>
               </button>
-            </form>
+            </form> : (
+              stripePromise ? (
+                <Elements stripe={stripePromise} options={{ clientSecret: payment.clientSecret }}>
+                  <StripePaymentForm
+                    orderId={payment.orderId}
+                    total={payment.total}
+                    onSuccess={handlePaymentSuccess}
+                  />
+                </Elements>
+              ) : <p role="alert" className="text-red-700">Secure card payments are not configured.</p>
+            )}
           </div>
         )}
 

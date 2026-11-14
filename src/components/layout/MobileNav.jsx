@@ -5,17 +5,23 @@ import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { NAV_CATEGORIES } from '../../data/categories';
+import { useProducts } from '../../hooks/useProducts';
+import { getCategoryProducts } from '../../utils/categoryProducts';
 
 export default function MobileNav({ isOpen, onClose }) {
   const [openSections, setOpenSections] = useState({
-    categories: true,
-    help: false,
-    company: false
+    collection: false,
+    help: false
   });
 
   const { wishlistCount } = useWishlist();
   const { totalCount, openCart } = useCart();
   const { user, isAuthenticated } = useAuth();
+  const { products, loading: productsLoading, error: productsError } = useProducts({
+    page: 1,
+    limit: 100,
+    enabled: isOpen && openSections.collection
+  });
 
   if (!isOpen) return null;
 
@@ -36,7 +42,7 @@ export default function MobileNav({ isOpen, onClose }) {
       />
 
       {/* Drawer */}
-      <div className="relative w-full max-w-xs bg-white h-full shadow-2xl flex flex-col z-10 overflow-y-auto animate-fade-in">
+      <div className="relative w-full max-w-xs bg-white text-sasta-heading h-full shadow-2xl flex flex-col z-10 overflow-y-auto animate-fade-in">
         {/* Header */}
         <div className="p-4 border-b border-sasta-border flex items-center justify-between bg-sasta-yellow-cream">
           <Link to="/" onClick={onClose} className="inline-block">
@@ -103,34 +109,80 @@ export default function MobileNav({ isOpen, onClose }) {
           {/* Categories Accordion */}
           <div className="px-4 py-2">
             <button
-              onClick={() => toggleSection('categories')}
+              onClick={() => toggleSection('collection')}
               className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-sasta-heading py-2"
             >
-              <span>Categories</span>
-              {openSections.categories ? (
+              <span>Our Collection</span>
+              {openSections.collection ? (
                 <ChevronDown className="w-4 h-4 text-sasta-muted" />
               ) : (
                 <ChevronRight className="w-4 h-4 text-sasta-muted" />
               )}
             </button>
 
-            {openSections.categories && (
+            {openSections.collection && (
               <div className="ml-1 mt-1 space-y-1 border-l border-sasta-gold/40 pb-2 pl-3 text-xs animate-fade-in">
-                {NAV_CATEGORIES.map((category) => (
-                  <Link
-                    key={category.path}
-                    to={category.path}
-                    onClick={handleLinkClick}
-                    className="block py-1 text-sasta-body hover:text-sasta-heading"
-                  >
-                    {category.name}
-                  </Link>
-                ))}
+                {NAV_CATEGORIES.map((category) => {
+                  const featuredProducts = getCategoryProducts(products, category);
+
+                  return (
+                    <div key={category.path} className="py-1">
+                      <Link
+                        to={category.path}
+                        onClick={handleLinkClick}
+                        className="block py-1 text-sasta-body hover:text-sasta-heading"
+                      >
+                        {category.name === 'All' ? 'Shop All' : category.name}
+                      </Link>
+                      {featuredProducts.map((product) => (
+                        <Link
+                          key={product.id}
+                          to={`/product/${product.handle}`}
+                          onClick={handleLinkClick}
+                          className="ml-2 flex items-center gap-2 rounded-md py-1.5 pr-1 text-sasta-body hover:bg-sasta-yellow-cream"
+                        >
+                          <img
+                            src={product.primaryImage}
+                            alt=""
+                            loading="lazy"
+                            className="h-10 w-8 shrink-0 rounded object-cover bg-sasta-yellow-cream"
+                          />
+                          <span className="min-w-0">
+                            <span className="block line-clamp-2 text-[11px] leading-snug">{product.title}</span>
+                            <span className="block text-[10px] font-semibold text-sasta-heading">
+                              £{Number(product.price).toFixed(2)}
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })}
+                {productsLoading && <p className="py-2 text-[11px] text-sasta-muted">Loading products…</p>}
+                {productsError && <p className="py-2 text-[11px] text-rose-700">Products could not be loaded.</p>}
               </div>
             )}
           </div>
 
-          {/* Contact Us */}
+          {/* Main pages */}
+          <div className="px-4 py-2">
+            <Link
+              to="/about"
+              onClick={handleLinkClick}
+              className="block text-sm font-semibold uppercase tracking-wider text-sasta-heading hover:text-sasta-gold-dark py-1"
+            >
+              About Us
+            </Link>
+          </div>
+          <div className="px-4 py-2">
+            <Link
+              to="/articles"
+              onClick={handleLinkClick}
+              className="block text-sm font-semibold uppercase tracking-wider text-sasta-heading hover:text-sasta-gold-dark py-1"
+            >
+              Our Articles
+            </Link>
+          </div>
           <div className="px-4 py-2">
             <Link
               to="/contact"
@@ -179,34 +231,6 @@ export default function MobileNav({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* Our Company Accordion */}
-          <div className="px-4 py-2">
-            <button
-              onClick={() => toggleSection('company')}
-              className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-sasta-heading py-2"
-            >
-              <span>Our Company</span>
-              {openSections.company ? (
-                <ChevronDown className="w-4 h-4 text-sasta-muted" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-sasta-muted" />
-              )}
-            </button>
-
-            {openSections.company && (
-              <div className="pl-3 pb-2 space-y-2 text-xs animate-fade-in border-l border-sasta-gold/40 ml-1 mt-1">
-                <Link to="/about" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
-                  About Sasta Bazaar
-                </Link>
-                <Link to="/privacy-policy" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
-                  Privacy Policy
-                </Link>
-                <Link to="/terms-of-service" onClick={handleLinkClick} className="block text-sasta-body hover:text-sasta-heading">
-                  Terms &amp; Conditions
-                </Link>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Footer info in drawer */}

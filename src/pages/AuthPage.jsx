@@ -91,14 +91,14 @@ export default function AuthPage() {
         postalCode: '',
         country: 'United Kingdom'
       });
-      fetchUserOrders(user.email);
+      fetchUserOrders();
     }
   }, [isAuthenticated, user]);
 
-  const fetchUserOrders = async (email) => {
+  const fetchUserOrders = async () => {
     setLoadingOrders(true);
     try {
-      const res = await api.getUserOrders(email);
+      const res = await api.getUserOrders();
       if (res.success && res.orders) {
         setUserOrders(res.orders);
       }
@@ -139,17 +139,6 @@ export default function AuthPage() {
     }
   };
 
-  // Quick Demo Login Helper
-  const handleDemoLogin = async () => {
-    setLoading(true);
-    setError('');
-    const res = await login('ayesha.khan@example.co.uk', 'password123');
-    setLoading(false);
-    if (!res.success) {
-      setError('Could not sign into demo account.');
-    }
-  };
-
   // Handle Registration Submit
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
@@ -165,8 +154,8 @@ export default function AuthPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -788,7 +777,7 @@ export default function AuthPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => alert('Password reset link has been simulated. Please enter your registered email to receive reset instructions.')}
+                    onClick={() => setError('Password reset is not available yet. Please contact store support.')}
                     className="text-[11px] font-semibold text-sasta-gold-dark hover:underline"
                   >
                     Forgot password?
@@ -846,18 +835,6 @@ export default function AuthPage() {
                   </>
                 )}
               </button>
-
-              {/* Quick Demo Login Option */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleDemoLogin}
-                  className="w-full bg-white hover:bg-sasta-yellow-cream border border-sasta-border text-sasta-navy text-xs font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  
-                  <span>⚡ Quick Demo Sign In (Ayesha Khan)</span>
-                </button>
-              </div>
 
               {/* Switch to Register */}
               <div className="pt-4 text-center border-t border-sasta-border">

@@ -23,7 +23,15 @@ export function useLocation() {
 export function useParams() {
   const { pathname } = useLocation();
   const segments = pathname.split('/').filter(Boolean);
-  return { slug: segments[1], handle: segments[1] };
+  let value = segments[1];
+  if (value) {
+    try {
+      value = decodeURIComponent(value);
+    } catch {
+      // Leave malformed path segments untouched so the data lookup returns its normal not-found response.
+    }
+  }
+  return { slug: value, handle: value };
 }
 
 export function useSearchParams() {

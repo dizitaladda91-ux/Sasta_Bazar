@@ -64,7 +64,8 @@ npm run db:init
 ```
 
 The import is safe to rerun: existing products, accounts, orders, inquiries, and subscribers
-are not duplicated. Legacy account passwords are hashed with bcrypt during import.
+are not duplicated. Legacy account passwords are hashed with bcryptjs; the demo account
+using the plaintext password `password123` is not imported.
 Variant stock initializes to `0` because the current JSON catalog does not contain
 stock counts; existing availability flags are retained separately.
 
@@ -80,6 +81,63 @@ npm run dev
 - **Store Admin Dashboard:** [http://localhost:3000/admin](http://localhost:3000/admin)
 - **Order Tracking:** [http://localhost:3000/track-order](http://localhost:3000/track-order)
 - **Backend API:** [http://localhost:3000/api/products](http://localhost:3000/api/products)
+
+## Authentication and Stripe setup
+
+Copy `.env.example` to `.env` and set the database connection, a strong random
+`JWT_SECRET`, Stripe test/live keys, and `ALLOWED_ORIGINS`. Keep secret values
+server-only; only `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and the API URL belong in
+the browser bundle. In Vercel, configure the same values in Project Settings →
+Environment Variables, including `JWT_SECRET`, `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `ALLOWED_ORIGINS`, and a random `CRON_SECRET` containing
+at least 32 characters. `ALLOWED_ORIGINS` is a comma-separated allowlist; include
+the production storefront origin and any local development origin you use.
+Next.js applies storefront CSP/security headers, while Helmet applies API headers.
+
+Initialize the database and create or update the administrator account:
+
+```powershell
+npm run db:init
+$env:ADMIN_EMAIL="admin@example.com"
+$env:ADMIN_PASSWORD="use-a-unique-password-of-at-least-8-characters"
+npm run admin:create
+```
+
+The app uses an httpOnly `sb_token` cookie. User profile and order history APIs
+derive identity from that cookie. Guest order tracking requires both the order
+ID and checkout email. Card payments create Pending orders; fulfillment starts
+only after Stripe's signed payment webhook confirms success.
+
+For local Stripe testing, start the app, then run the Stripe CLI in another
+terminal:
+
+```powershell
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+Copy the CLI's `whsec_...` signing secret into `STRIPE_WEBHOOK_SECRET` and restart
+the app. Use Stripe's test publishable and secret keys, then complete a checkout
+with a Stripe test card such as `4242 4242 4242 4242`.
+
+For production, add a webhook endpoint in the Stripe Dashboard at
+`https://<your-vercel-domain>/api/webhooks/stripe`. Subscribe to
+`payment_intent.succeeded`, `payment_intent.payment_failed`,
+`payment_intent.canceled`, and `charge.refunded`. Copy the endpoint's signing
+secret into the Vercel `STRIPE_WEBHOOK_SECRET` environment variable and redeploy.
+Vercel Cron is configured in `vercel.json` to call
+`/api/cron/release-stale-orders` every 15 minutes. Vercel sends the configured
+`CRON_SECRET` as a bearer token. The endpoint cancels unpaid Stripe intents
+before releasing their inventory; orders with successful payments are left for
+the Stripe webhook. For a manual run, use `npm run orders:release-stale`.
+
+Administrators can issue partial refunds in GBP or refund the remaining balance.
+Refunds are capped at the remaining order total; a full refund restores reserved
+inventory only when the order has not been dispatched or delivered.
+To test refunds safely, use Stripe test keys and complete a test checkout (for
+example, with `4242 4242 4242 4242`). Sign in to `/admin`, choose **Refund**, enter
+a partial amount or leave it blank for the remaining balance, then confirm. Verify
+the refund in Stripe's test-mode dashboard and confirm `refunded_amount` and
+`payment_status` in the order record. Never test refunds with live payment data.
 
 ---
 

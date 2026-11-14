@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Package,
   ShoppingBag,
@@ -15,8 +16,10 @@ import {
   Filter
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminDashboardPage() {
+  const { user, initializing } = useAuth();
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'products', 'subscribers'
   const [stats, setStats] = useState({
     totalProducts: 0,
@@ -28,10 +31,14 @@ export default function AdminDashboardPage() {
   });
 
   const [orders, setOrders] = useState([]);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPages, setOrderPages] = useState(1);
+  const [orderTotal, setOrderTotal] = useState(0);
   const [products, setProducts] = useState([]);
   const [stockDrafts, setStockDrafts] = useState({});
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState('');
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Add Product Form State
   const [newProduct, setNewProduct] = useState({
@@ -50,25 +57,34 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     document.title = 'Store Admin Dashboard | SASTA BAZAAR';
     window.scrollTo(0, 0);
-    fetchAdminData();
-  }, []);
+    if (!initializing && user?.role === 'admin') fetchAdminData();
+    else if (!initializing) setAccessDenied(true);
+  }, [initializing, user]);
 
   const showToast = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), 3000);
   };
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = async (page = orderPage) => {
     setLoading(true);
-    const statsRes = await api.getAdminStats();
-    if (statsRes.success) setStats(statsRes.stats);
-
-    const ordersRes = await api.getAdminOrders();
-    if (ordersRes.success) setOrders(ordersRes.orders);
-
-    const prodsRes = await api.getProducts();
-    setProducts(prodsRes);
-    setLoading(false);
+    try {
+      const statsRes = await api.getAdminStats();
+      if (statsRes.success) setStats(statsRes.stats);
+      const ordersRes = await api.getAdminOrders({ page, limit: 20 });
+      if (ordersRes.success) {
+        setOrders(ordersRes.orders);
+        setOrderPage(ordersRes.page);
+        setOrderPages(ordersRes.pages);
+        setOrderTotal(ordersRes.total);
+      }
+      setProducts(await api.getProducts());
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) setAccessDenied(true);
+      else showToast(error.message || 'Could not load admin data.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdateStatus = async (orderId, newStatus) => {
@@ -128,6 +144,43 @@ export default function AdminDashboardPage() {
       showToast('Stock quantity updated.');
     }
   };
+
+  const handleRefund = async (orderId, remainingAmount) => {
+    const amountInput = window.prompt(
+      `Enter a refund amount in GBP, or leave blank to refund the full remaining £${remainingAmount.toFixed(2)}:`
+    );
+    if (amountInput === null) return;
+    const amount = amountInput.trim() ? Number(amountInput) : undefined;
+    if (amount !== undefined && (!Number.isFinite(amount) || amount <= 0 || amount > remainingAmount)) {
+      showToast('Enter a valid amount up to the remaining refund balance.');
+      return;
+    }
+    const confirmation = amount === undefined
+      ? `Refund the remaining £${remainingAmount.toFixed(2)} for order ${orderId}?`
+      : `Refund £${amount.toFixed(2)} for order ${orderId}?`;
+    if (!window.confirm(confirmation)) return;
+    try {
+      await api.refundOrder(orderId, amount === undefined ? {} : { amount });
+      showToast(`Refund initiated for ${orderId}`);
+      await fetchAdminData();
+    } catch (error) {
+      showToast(error.message || 'Could not refund this order.');
+    }
+  };
+
+  if (initializing) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-sasta-muted">Checking administrator access...</div>;
+  }
+
+  if (accessDenied || user?.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <h1 className="font-serif text-2xl font-bold text-sasta-heading">Access denied / please sign in</h1>
+        <p className="text-sm text-sasta-body">An administrator account is required to view this dashboard.</p>
+        <Link to="/login" className="bg-sasta-gold px-5 py-3 rounded font-bold text-sm">Sign in</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-neutral-50 min-h-screen py-8 sm:py-12 text-sasta-heading">
@@ -267,7 +320,7 @@ export default function AdminDashboardPage() {
                 {orders.map((o) => (
                   <tr key={o.orderId} className="hover:bg-neutral-50">
                     <td className="py-3 px-4 font-bold text-sasta-navy">
-                      <Link to={`/track-order?id=${o.orderId}`} className="hover:underline text-sasta-gold-dark font-extrabold flex items-center gap-1">
+                      <Link to={`/track-order?id=${encodeURIComponent(o.orderId)}&email=${encodeURIComponent(o.customer.email)}`} className="hover:underline text-sasta-gold-dark font-extrabold flex items-center gap-1">
                         <span>{o.orderId}</span>
                         <ExternalLink className="w-3 h-3" />
                       </Link>
@@ -315,11 +368,40 @@ export default function AdminDashboardPage() {
                           Delivered
                         </button>
                       )}
+                      {o.paymentStatus === 'Paid' && (
+                        <button
+                          onClick={() => handleRefund(o.orderId, Math.max(0, o.total - (o.refundedAmount || 0)))}
+                          className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow-2xs"
+                        >
+                          Refund
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <div className="flex items-center justify-between gap-3 border-t border-sasta-border px-4 py-3 text-xs">
+              <span className="text-sasta-muted">{orderTotal} total orders · Page {orderPage} of {orderPages}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={loading || orderPage <= 1}
+                  onClick={() => fetchAdminData(orderPage - 1)}
+                  className="rounded border border-sasta-border px-3 py-1.5 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={loading || orderPage >= orderPages}
+                  onClick={() => fetchAdminData(orderPage + 1)}
+                  className="rounded border border-sasta-border px-3 py-1.5 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import heroImages from '../../data/heroImages.json';
 import { useStorefrontContent } from '../../hooks/useStorefrontContent';
 
 export default function HeroBanner() {
   const { content: copy } = useStorefrontContent('home_copy');
   const [activeImage, setActiveImage] = useState(0);
+  const eyebrowParts = copy?.hero?.eyebrow?.split('•').map((part) => part.trim()).filter(Boolean) || [];
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -26,8 +28,17 @@ export default function HeroBanner() {
         />
         <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-black/10 via-black/25 to-black/45" />
         <div className="relative z-20 max-w-5xl">
-          <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.22em] text-[#f0c969] drop-shadow sm:mb-6 sm:text-sm">
-            {copy?.hero?.eyebrow}
+          <p className="mx-auto mb-4 inline-flex max-w-full items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#ffe28a] drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] sm:mb-6 sm:gap-3 sm:text-base sm:tracking-[0.18em]">
+            <Sparkles aria-hidden="true" className="h-4 w-4 shrink-0 text-[#f0c969] sm:h-5 sm:w-5" />
+            {eyebrowParts.length > 1 ? (
+              <>
+                <span>{eyebrowParts[0]}</span>
+                <span aria-hidden="true" className="text-[#f0c969]">•</span>
+                <span className="text-[13px] font-black sm:text-xl">{eyebrowParts.slice(1).join(' • ')}</span>
+              </>
+            ) : (
+              <span className="text-[13px] font-black sm:text-xl">{copy?.hero?.eyebrow}</span>
+            )}
           </p>
           <h1 className="font-serif text-3xl font-normal leading-tight text-white drop-shadow-[0_3px_14px_rgba(0,0,0,0.8)] sm:text-5xl lg:text-7xl">
             {copy?.hero?.title}

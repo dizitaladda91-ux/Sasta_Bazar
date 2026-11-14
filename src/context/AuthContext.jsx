@@ -3,54 +3,48 @@ import { api } from '../services/api';
 
 const AuthContext = createContext();
 
-const AUTH_STORAGE_KEY = 'sasta_bazaar_auth_user_v1';
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem(AUTH_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      console.error('Failed to parse user from localStorage', e);
-      return null;
-    }
-  });
-
+  const [user, setUser] = useState(null);
+  const [initializing, setInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
-    try {
-      if (user) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    } catch (e) {
-      console.error('Failed to save user in localStorage', e);
-    }
-  }, [user]);
+    let active = true;
+    api.getMe()
+      .then((response) => {
+        if (active) setUser(response.user);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setUser(null);
+        if (error.status !== 401) {
+          setNotification(error.message || 'Could not verify your account session.');
+        }
+      })
+      .finally(() => {
+        if (active) setInitializing(false);
+      });
+    return () => { active = false; };
+  }, []);
 
-  const showNotification = (msg) => {
-    setNotification(msg);
-    setTimeout(() => {
-      setNotification(null);
-    }, 3500);
+  const showNotification = (message) => {
+    setNotification(message);
+    setTimeout(() => setNotification(null), 3500);
   };
 
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const res = await api.login({ email, password });
-      if (res.success && res.user) {
-        setUser(res.user);
-        showNotification(`Welcome back, ${res.user.name.split(' ')[0]}!`);
-        return { success: true, user: res.user };
-      } else {
-        return { success: false, message: res.message || 'Login failed' };
+      const response = await api.login({ email, password });
+      if (response.success && response.user) {
+        setUser(response.user);
+        showNotification(`Welcome back, ${response.user.name.split(' ')[0]}!`);
+        return { success: true, user: response.user };
       }
-    } catch (err) {
-      return { success: false, message: 'Network error during login' };
+      return { success: false, message: response.message || 'Login failed' };
+    } catch (error) {
+      return { success: false, message: error.message || 'Network error during login' };
     } finally {
       setLoading(false);
     }
@@ -59,16 +53,15 @@ export function AuthProvider({ children }) {
   const register = async (userData) => {
     setLoading(true);
     try {
-      const res = await api.register(userData);
-      if (res.success && res.user) {
-        setUser(res.user);
-        showNotification(`Account created! Welcome to Sasta Bazaar.`);
-        return { success: true, user: res.user, couponCode: res.couponCode };
-      } else {
-        return { success: false, message: res.message || 'Registration failed' };
+      const response = await api.register(userData);
+      if (response.success && response.user) {
+        setUser(response.user);
+        showNotification('Account created! Welcome to Sasta Bazaar.');
+        return { success: true, user: response.user, couponCode: response.couponCode };
       }
-    } catch (err) {
-      return { success: false, message: 'Network error during registration' };
+      return { success: false, message: response.message || 'Registration failed' };
+    } catch (error) {
+      return { success: false, message: error.message || 'Network error during registration' };
     } finally {
       setLoading(false);
     }
@@ -77,21 +70,28 @@ export function AuthProvider({ children }) {
   const updateProfile = async (profileData) => {
     if (!user) return { success: false, message: 'Not logged in' };
     try {
-      const res = await api.updateProfile({ ...profileData, email: user.email });
-      if (res.success && res.user) {
-        setUser(res.user);
+      const response = await api.updateProfile(profileData);
+      if (response.success && response.user) {
+        setUser(response.user);
         showNotification('Profile updated successfully');
-        return { success: true, user: res.user };
+        return { success: true, user: response.user };
       }
-      return { success: false, message: res.message };
-    } catch (e) {
-      return { success: false, message: 'Error updating profile' };
+      return { success: false, message: response.message };
+    } catch (error) {
+      return { success: false, message: error.message || 'Error updating profile' };
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    showNotification('You have been signed out.');
+  const logout = async () => {
+    try {
+      await api.logout();
+      setUser(null);
+      showNotification('You have been signed out.');
+      return { success: true };
+    } catch (error) {
+      showNotification(error.message || 'Could not sign out. Please try again.');
+      return { success: false, message: error.message };
+    }
   };
 
   return (
@@ -99,6 +99,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         isAuthenticated: Boolean(user),
+        initializing,
         loading,
         notification,
         login,
@@ -115,8 +116,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }

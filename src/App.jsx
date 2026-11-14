@@ -19,6 +19,7 @@ import CartPage from './pages/CartPage';
 import WishlistPage from './pages/WishlistPage';
 import SearchResultsPage from './pages/SearchResultsPage';
 import AboutPage from './pages/AboutPage';
+import ArticlesPage from './pages/ArticlesPage';
 import ContactPage from './pages/ContactPage';
 import SizeGuidePage from './pages/SizeGuidePage';
 import FaqsPage from './pages/FaqsPage';
@@ -67,6 +68,7 @@ function MainLayout() {
   else if (pathname === '/wishlist') page = <WishlistPage />;
   else if (pathname === '/search') page = <SearchResultsPage />;
   else if (pathname === '/about') page = <AboutPage />;
+  else if (pathname === '/articles') page = <ArticlesPage />;
   else if (pathname === '/contact') page = <ContactPage />;
   else if (pathname === '/size-guide') page = <SizeGuidePage />;
   else if (pathname === '/faqs') page = <FaqsPage />;

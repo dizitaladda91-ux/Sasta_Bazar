@@ -6,6 +6,7 @@ import { api } from '../services/api';
 export default function TrackOrderPage() {
   const [searchParams] = useSearchParams();
   const [orderIdInput, setOrderIdInput] = useState(searchParams.get('id') || '');
+  const [emailInput, setEmailInput] = useState(searchParams.get('email') || '');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -14,20 +15,27 @@ export default function TrackOrderPage() {
     document.title = 'Track Your Order | SASTA BAZAAR';
     window.scrollTo(0, 0);
     const initialId = searchParams.get('id');
-    if (initialId) {
-      handleSearch(initialId);
+    const initialEmail = searchParams.get('email');
+    if (initialId && initialEmail) {
+      handleSearch(initialId, initialEmail);
     }
   }, [searchParams]);
 
-  const handleSearch = async (idToSearch) => {
+  const handleSearch = async (idToSearch, emailToSearch) => {
     const queryId = (idToSearch || orderIdInput).trim();
-    if (!queryId) return;
+    const queryEmail = (emailToSearch || emailInput).trim();
+    if (!queryId || !queryEmail) return;
 
     setLoading(true);
     setError('');
     setOrder(null);
 
-    const result = await api.trackOrder(queryId);
+    let result;
+    try {
+      result = await api.trackOrder(queryId, queryEmail);
+    } catch (requestError) {
+      result = { success: false, message: requestError.message };
+    }
     setLoading(false);
 
     if (result.success && result.order) {
@@ -58,7 +66,7 @@ export default function TrackOrderPage() {
             Track Your Order
           </h1>
           <p className="text-xs sm:text-sm text-sasta-body">
-            Enter your Sasta Bazaar order ID (e.g. <strong>SB-982143</strong>) to check current dispatch &amp; courier status.
+            Enter your order ID and the email address used at checkout to check dispatch &amp; courier status.
           </p>
         </div>
 
@@ -68,7 +76,7 @@ export default function TrackOrderPage() {
             e.preventDefault();
             handleSearch();
           }}
-          className="flex gap-2 max-w-md mx-auto"
+          className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto"
         >
           <div className="relative flex-1">
             <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-sasta-muted" />
@@ -81,6 +89,14 @@ export default function TrackOrderPage() {
               className="w-full pl-10 pr-3 py-3 bg-sasta-yellow-cream/40 border border-sasta-border rounded-md text-xs sm:text-sm text-sasta-heading uppercase placeholder-sasta-muted focus:outline-none focus:border-sasta-gold"
             />
           </div>
+          <input
+            type="email"
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            placeholder="Email used at checkout"
+            required
+            className="flex-1 px-3 py-3 bg-sasta-yellow-cream/40 border border-sasta-border rounded-md text-xs sm:text-sm text-sasta-heading placeholder-sasta-muted focus:outline-none focus:border-sasta-gold"
+          />
           <button
             type="submit"
             disabled={loading}

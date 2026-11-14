@@ -76,6 +76,7 @@ app.post('/api/orders', (_req, res) => res.status(410).json({
 const toPublicId = (value) => /^\d+$/.test(String(value)) ? Number(value) : value;
 const money = (value) => Math.round(Number(value) * 100) / 100;
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const categorySlug = (value) => slugify(value) || 'uncategorized';
 const createOrderReference = () => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   const bytes = crypto.randomBytes(5);
@@ -260,7 +261,7 @@ async function createProduct(client, input) {
   assertTopLevelStockAllowed(input.stock, incomingVariants.length);
 
   const parentName = input.category || 'Ladies Collection';
-  const parentSlug = slugify(parentName) || 'uncategorized';
+  const parentSlug = categorySlug(parentName);
   const parent = await client.query(
     `INSERT INTO categories (name, slug) VALUES ($1, $2)
      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
@@ -834,16 +835,17 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
     const compareAtPrice = updated.compareAtPrice == null ? null : Number(updated.compareAtPrice);
     const discount = compareAtPrice > price ? Math.round((compareAtPrice - price) / compareAtPrice * 100) : 0;
     const categoryName = updated.category || existing.category;
+    const parentSlug = categorySlug(categoryName);
     const category = await client.query(
       `INSERT INTO categories (name,slug) VALUES ($1,$2)
        ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name RETURNING id`,
-      [categoryName, slugify(categoryName)]
+      [categoryName, parentSlug]
     );
     const categoryId = (await client.query(
       `INSERT INTO categories (parent_id,name,slug) VALUES ($1,$2,$3)
        ON CONFLICT (slug) DO UPDATE SET parent_id=EXCLUDED.parent_id,name=EXCLUDED.name RETURNING id`,
       [category.rows[0].id, updated.subcategory || 'Uncategorized',
-        `${slugify(categoryName)}-${slugify(updated.subcategory || 'Uncategorized')}`]
+        `${parentSlug}-${slugify(updated.subcategory || 'Uncategorized')}`]
     )).rows[0].id;
     await client.query(
       `UPDATE products SET title=$2,raw_title=$3,description=$4,price=$5,stock=$6,compare_at_price=$7,

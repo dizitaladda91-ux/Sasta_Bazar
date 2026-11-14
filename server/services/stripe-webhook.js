@@ -12,11 +12,15 @@ export async function processStripeEvent(event) {
 
     const object = event.data.object;
     if (event.type === 'payment_intent.succeeded') {
-      await client.query(
+      const order = await client.query(
         `UPDATE orders SET payment_status = 'Paid', order_status = 'Processing', paid_at = NOW()
-         WHERE stripe_payment_intent_id = $1 AND payment_status = 'Pending'`,
+         WHERE stripe_payment_intent_id = $1 AND payment_status = 'Pending'
+         RETURNING coupon_id`,
         [object.id]
       );
+      if (order.rows[0]?.coupon_id != null) {
+        await client.query('UPDATE coupons SET redemption_count=redemption_count+1 WHERE id=$1', [order.rows[0].coupon_id]);
+      }
     } else if (['payment_intent.payment_failed', 'payment_intent.canceled'].includes(event.type)) {
       const order = await client.query(
         `SELECT id FROM orders WHERE stripe_payment_intent_id = $1 AND payment_status = 'Pending'

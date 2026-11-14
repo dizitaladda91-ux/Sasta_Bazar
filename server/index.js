@@ -20,6 +20,7 @@ import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from '.
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
 import { verifyPassword } from './services/passwordRules.js';
+import { calculateCouponDiscount, hasCouponUsageAvailable } from './services/couponRules.js';
 import {
   assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants, sortCheckoutItems
 } from './services/productRules.js';
@@ -431,16 +432,43 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
         }
       }
       const subtotal = money(resolvedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0));
-      const discount = promoCode?.toUpperCase() === 'WELCOME10' ? money(subtotal * 0.1) : 0;
+      let coupon = null;
+      let discount = 0;
+      if (promoCode) {
+        const couponResult = await client.query(
+          `SELECT id, code, discount_type, discount_value, minimum_order,
+                  max_redemptions, redemption_count
+           FROM coupons
+           WHERE UPPER(code)=UPPER($1) AND is_active=TRUE
+             AND (starts_at IS NULL OR starts_at <= NOW())
+             AND (expires_at IS NULL OR expires_at > NOW())
+           FOR UPDATE`,
+          [promoCode]
+        );
+        coupon = couponResult.rows[0];
+        if (!coupon) {
+          throw Object.assign(new Error('This promo code is invalid or expired.'), { status: 400 });
+        }
+        const pending = await client.query(
+          `SELECT COUNT(*)::int AS count FROM orders
+           WHERE coupon_id=$1 AND payment_status='Pending'
+             AND created_at > NOW() - INTERVAL '30 minutes'`,
+          [coupon.id]
+        );
+        if (!hasCouponUsageAvailable(coupon, pending.rows[0].count)) {
+          throw Object.assign(new Error('This promo code has reached its redemption limit.'), { status: 400 });
+        }
+        discount = money(calculateCouponDiscount(subtotal, coupon));
+      }
       const shipping = subtotal >= 40 ? 0 : 3.99;
       const total = money(Math.max(0, subtotal - discount + shipping));
       const inserted = await client.query(
         `INSERT INTO orders
-          (order_ref,user_id,customer_name,customer_email,customer_phone,shipping_address,shipping_city,
+          (order_ref,user_id,coupon_id,customer_name,customer_email,customer_phone,shipping_address,shipping_city,
            shipping_postcode,subtotal,shipping,discount,total,payment_method,payment_status,order_status,courier)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Stripe','Pending','Awaiting Payment','Royal Mail Tracked 48')
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Stripe','Pending','Awaiting Payment','Royal Mail Tracked 48')
          RETURNING id`,
-        [orderRef, req.user?.id || null, customer.name, customer.email, customer.phone,
+        [orderRef, req.user?.id || null, coupon?.id || null, customer.name, customer.email, customer.phone,
           customer.address, customer.city, customer.postcode, subtotal, shipping, discount, total]
       );
       const orderId = inserted.rows[0].id;

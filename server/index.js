@@ -22,6 +22,7 @@ import { processStripeEvent } from './services/stripe-webhook.js';
 import { verifyPassword } from './services/passwordRules.js';
 import { calculateCouponDiscount, hasCouponUsageAvailable } from './services/couponRules.js';
 import { getReservationLockKeys, hasReservationCapacity } from './services/reservationRules.js';
+import { assertOrderStatusTransition } from './services/orderStatusRules.js';
 import {
   assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants, sortCheckoutItems
 } from './services/productRules.js';
@@ -769,12 +770,23 @@ app.get('/api/admin/orders', validate({ query: pageQuery }), route(async (req, r
 
 app.patch('/api/admin/orders/:orderId', validate({ params: orderIdParams, body: orderStatusBody }), route(async (req, res) => {
   const { orderStatus, trackingNumber, courier } = req.validated.body;
-  const result = await query(
-    `UPDATE orders SET order_status=COALESCE($2,order_status), tracking_number=COALESCE($3,tracking_number),
-       courier=COALESCE($4,courier) WHERE LOWER(order_ref)=LOWER($1)`,
-    [req.validated.params.orderId, orderStatus || null, trackingNumber || null, courier || null]
-  );
-  if (!result.rowCount) return res.status(404).json({ success: false, message: 'Order not found' });
+  const updated = await inTransaction(async (client) => {
+    const current = await client.query(
+      'SELECT id,order_status,payment_status FROM orders WHERE LOWER(order_ref)=LOWER($1) FOR UPDATE',
+      [req.validated.params.orderId]
+    );
+    if (!current.rowCount) return false;
+    if (orderStatus) {
+      assertOrderStatusTransition(current.rows[0].order_status, orderStatus, current.rows[0].payment_status);
+    }
+    await client.query(
+      `UPDATE orders SET order_status=COALESCE($2,order_status), tracking_number=COALESCE($3,tracking_number),
+         courier=COALESCE($4,courier) WHERE id=$1`,
+      [current.rows[0].id, orderStatus || null, trackingNumber || null, courier || null]
+    );
+    return true;
+  });
+  if (!updated) return res.status(404).json({ success: false, message: 'Order not found' });
   res.json({ success: true, message: 'Order status updated', order: await getOrder(req.validated.params.orderId) });
 }));
 

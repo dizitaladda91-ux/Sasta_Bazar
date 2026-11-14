@@ -123,7 +123,7 @@ export const productUpdateBody = z.object(productFields).partial().strict()
   .refine((value) => Object.keys(value).length > 0, 'At least one product field is required.');
 
 export const orderStatusBody = z.object({
-  orderStatus: z.enum(['Processing', 'Dispatched', 'Delivered', 'Cancelled']).optional(),
+  orderStatus: z.enum(['Processing', 'Dispatched', 'Shipped', 'Delivered', 'Cancelled']).optional(),
   trackingNumber: optionalText(100),
   courier: optionalText(100)
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one order field is required.');

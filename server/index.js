@@ -606,6 +606,7 @@ app.post('/api/newsletter', newsletterLimiter, validate({ body: newsletterBody }
     [email]
   );
   const created = result.rowCount > 0;
+  // TODO: Require email confirmation before reactivating an existing subscriber once a mailer is configured.
   if (!created) await query('UPDATE subscribers SET is_active=TRUE WHERE email=$1', [email]);
   res.status(created ? 201 : 200).json({
     success: true,

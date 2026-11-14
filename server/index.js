@@ -20,7 +20,7 @@ import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from '.
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
 import {
-  assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants
+  assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants, sortCheckoutItems
 } from './services/productRules.js';
 import { requireCronSecret } from './middleware/cronAuth.js';
 import {
@@ -380,12 +380,13 @@ app.get('/api/storefront/content/:key', route(async (req, res) => {
 
 app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, validate({ body: checkoutBody }), route(async (req, res) => {
   const { customer, items, promoCode } = req.validated.body;
+  const orderedItems = sortCheckoutItems(items);
   const stripe = getStripe();
   const createPendingOrder = async () => {
     const orderRef = createOrderReference();
     return inTransaction(async (client) => {
       const variantsById = new Map();
-      for (const item of items) {
+      for (const item of orderedItems) {
         const productResult = await client.query(
           `SELECT id, title, primary_image, is_active FROM products
            WHERE external_id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,

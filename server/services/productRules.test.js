@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants
+  assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants, sortCheckoutItems
 } from './productRules.js';
 
 test('rejects top-level stock for products with multiple variants', () => {
@@ -62,4 +62,15 @@ test('upserts matching variants without deleting IDs and deactivates omitted var
     { stock: 0, available: false }
   );
   assert.equal(statements.some((sql) => sql.startsWith('DELETE FROM variants')), false);
+});
+
+test('sorts checkout items deterministically by product, variant, size, and color', () => {
+  const items = [
+    { productId: '2', variantId: 'b', size: 'M', color: 'Blue' },
+    { productId: '1', variantId: 'a', size: 'L', color: 'Black' },
+    { productId: '1', variantId: 'a', size: 'S', color: 'Blue' },
+    { productId: '1', variantId: 'a', size: 'S', color: 'Black' }
+  ];
+  assert.deepEqual(sortCheckoutItems(items), [items[1], items[3], items[2], items[0]]);
+  assert.equal(items[0].productId, '2');
 });

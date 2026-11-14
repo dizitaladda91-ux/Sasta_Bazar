@@ -14,6 +14,16 @@ export function getIncomingVariants(input, price, compareAtPrice) {
   return colors.map((color) => ({ title: color, color, price, compareAtPrice }));
 }
 
+export function sortCheckoutItems(items) {
+  const compare = (left, right) => left < right ? -1 : left > right ? 1 : 0;
+  return [...items].sort((left, right) => (
+    compare(String(left.productId), String(right.productId))
+    || compare(String(left.variantId ?? ''), String(right.variantId ?? ''))
+    || compare(String(left.size ?? ''), String(right.size ?? ''))
+    || compare(String(left.color ?? ''), String(right.color ?? ''))
+  ));
+}
+
 export function assertTopLevelStockAllowed(stock, variantCount) {
   if (stock !== undefined && variantCount > 1) {
     throw Object.assign(

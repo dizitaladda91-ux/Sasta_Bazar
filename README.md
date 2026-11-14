@@ -94,9 +94,8 @@ server-only; only `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and the API URL belong in
 the browser bundle. In Vercel, configure the same values in Project Settings →
 Environment Variables, including `JWT_SECRET`, `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET`, `ALLOWED_ORIGINS`, and a random `CRON_SECRET` containing
-at least 32 characters. For shared API rate limits, also set
-`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; local development uses
-in-memory rate limits when both are absent. `ALLOWED_ORIGINS` is a comma-separated allowlist; include
+at least 32 characters. API rate limits currently use per-instance in-memory
+storage and are not shared across serverless instances. `ALLOWED_ORIGINS` is a comma-separated allowlist; include
 the production storefront origin and any local development origin you use.
 Next.js applies storefront CSP/security headers, while Helmet applies API headers.
 

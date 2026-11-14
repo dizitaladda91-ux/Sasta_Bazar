@@ -317,6 +317,8 @@ async function createProduct(client, input) {
 
 app.get('/api/products', validate({ query: productsQuery }), route(async (req, res) => {
   const { page, limit, category, subcategory, search, filter, sort, collection } = req.validated.query;
+  const currentPage = page ?? 1;
+  const pageSize = limit ?? 100;
   const values = [];
   const filters = [];
   const addFilter = (sql, value) => {
@@ -346,19 +348,18 @@ app.get('/api/products', validate({ query: productsQuery }), route(async (req, r
     values
   );
   const total = count.rows[0].total;
-  const paginated = page !== undefined;
   const products = await getProducts(
     where,
     values,
     orderBy,
-    paginated ? { page, limit: limit || 20 } : null
+    { page: currentPage, limit: pageSize }
   );
   const response = {
     success: true,
     count: products.length,
     total,
-    page: page || 1,
-    pages: paginated ? Math.max(1, Math.ceil(total / (limit || 20))) : 1,
+    page: currentPage,
+    pages: Math.ceil(total / pageSize),
     products
   };
   res.json(response);

@@ -21,6 +21,7 @@ import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
 import { verifyPassword } from './services/passwordRules.js';
 import { calculateCouponDiscount, hasCouponUsageAvailable } from './services/couponRules.js';
+import { getReservationLockKeys, hasReservationCapacity } from './services/reservationRules.js';
 import {
   assertTopLevelStockAllowed, getIncomingVariants, replaceProductVariants, sortCheckoutItems
 } from './services/productRules.js';
@@ -387,6 +388,21 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
   const createPendingOrder = async () => {
     const orderRef = createOrderReference();
     return inTransaction(async (client) => {
+      const customerIp = req.ip || '';
+      for (const lockKey of getReservationLockKeys(customer.email, customerIp)) {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey]);
+      }
+      const reservations = await client.query(
+        `SELECT COUNT(*) FILTER (WHERE LOWER(customer_email)=LOWER($1))::int AS email_count,
+                COUNT(*) FILTER (WHERE customer_ip=$2)::int AS ip_count
+         FROM orders
+         WHERE payment_status='Pending' AND created_at > NOW() - INTERVAL '30 minutes'
+           AND (LOWER(customer_email)=LOWER($1) OR customer_ip=$2)`,
+        [customer.email, customerIp]
+      );
+      if (!hasReservationCapacity(reservations.rows[0].email_count, reservations.rows[0].ip_count)) {
+        throw Object.assign(new Error('Too many unpaid checkout attempts. Please wait before trying again.'), { status: 429 });
+      }
       const variantsById = new Map();
       for (const item of orderedItems) {
         const productResult = await client.query(
@@ -464,11 +480,11 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
       const total = money(Math.max(0, subtotal - discount + shipping));
       const inserted = await client.query(
         `INSERT INTO orders
-          (order_ref,user_id,coupon_id,customer_name,customer_email,customer_phone,shipping_address,shipping_city,
+          (order_ref,user_id,coupon_id,customer_name,customer_email,customer_ip,customer_phone,shipping_address,shipping_city,
            shipping_postcode,subtotal,shipping,discount,total,payment_method,payment_status,order_status,courier)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Stripe','Pending','Awaiting Payment','Royal Mail Tracked 48')
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Stripe','Pending','Awaiting Payment','Royal Mail Tracked 48')
          RETURNING id`,
-        [orderRef, req.user?.id || null, coupon?.id || null, customer.name, customer.email, customer.phone,
+        [orderRef, req.user?.id || null, coupon?.id || null, customer.name, customer.email, customerIp, customer.phone,
           customer.address, customer.city, customer.postcode, subtotal, shipping, discount, total]
       );
       const orderId = inserted.rows[0].id;

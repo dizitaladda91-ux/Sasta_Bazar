@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS orders (
   coupon_id BIGINT REFERENCES coupons(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL,
   customer_email TEXT NOT NULL,
+  customer_ip TEXT NOT NULL DEFAULT '',
   customer_phone TEXT NOT NULL DEFAULT '',
   shipping_address TEXT NOT NULL,
   shipping_city TEXT NOT NULL DEFAULT '',
@@ -140,6 +141,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_ip TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_released BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_amount NUMERIC(12, 2) NOT NULL DEFAULT 0
@@ -174,6 +176,7 @@ CREATE TABLE IF NOT EXISTS order_refunds (
 
 CREATE INDEX IF NOT EXISTS order_refunds_order_idx ON order_refunds(order_id);
 CREATE INDEX IF NOT EXISTS orders_customer_email_idx ON orders(LOWER(customer_email));
+CREATE INDEX IF NOT EXISTS orders_customer_ip_created_idx ON orders(customer_ip, created_at);
 CREATE INDEX IF NOT EXISTS orders_created_at_idx ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS products_collection_slug_idx ON products(collection_slug);
 CREATE INDEX IF NOT EXISTS products_active_created_at_idx ON products(is_active, created_at DESC);

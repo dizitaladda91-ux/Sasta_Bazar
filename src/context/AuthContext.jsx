@@ -37,6 +37,14 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const response = await api.login({ email, password });
+      if (response.requires2fa && response.challengeToken) {
+        return {
+          success: false,
+          requires2fa: true,
+          challengeToken: response.challengeToken,
+          message: response.message
+        };
+      }
       if (response.success && response.user) {
         setUser(response.user);
         showNotification(`Welcome back, ${response.user.name.split(' ')[0]}!`);
@@ -48,6 +56,29 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const verify2fa = async (challengeToken, code) => {
+    setLoading(true);
+    try {
+      const response = await api.verify2faLogin({ challengeToken, code });
+      if (response.success && response.user) {
+        setUser(response.user);
+        showNotification(`Welcome back, ${response.user.name.split(' ')[0]}!`);
+        return { success: true, user: response.user };
+      }
+      return { success: false, message: response.message || 'Invalid 2FA code' };
+    } catch (error) {
+      return { success: false, message: error.message || '2FA verification failed' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    const response = await api.getMe();
+    if (response.user) setUser(response.user);
+    return response.user;
   };
 
   const register = async (userData) => {
@@ -103,6 +134,8 @@ export function AuthProvider({ children }) {
         loading,
         notification,
         login,
+        verify2fa,
+        refreshUser,
         register,
         updateProfile,
         logout,

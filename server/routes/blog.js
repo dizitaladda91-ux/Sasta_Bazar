@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { inTransaction, query } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { evaluateSeoScore, sanitizeBlogHtml, slugify } from '../../lib/blog-seo.js';
+import { isCloudinaryConfigured, uploadToCloudinary } from '../services/cloudinary.js';
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -476,6 +477,16 @@ router.post('/upload', route(async (req, res) => {
   const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
   const safeBase = slugify(path.basename(filename, path.extname(filename))) || 'blog-image';
   const objectName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${safeBase}.${ext}`;
+
+  if (isCloudinaryConfigured()) {
+    const dataUri = `data:${mimeType};base64,${cleanBase64}`;
+    const uploaded = await uploadToCloudinary({
+      dataUri,
+      folder: 'sasta-bazaar/blog',
+      publicId: `${Date.now()}-${safeBase}`
+    });
+    return res.json({ success: true, url: uploaded.url, provider: 'cloudinary' });
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

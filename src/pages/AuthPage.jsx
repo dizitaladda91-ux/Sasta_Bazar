@@ -28,7 +28,7 @@ import SEO from '../components/common/SEO';
 export default function AuthPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, login, register, logout, updateProfile } = useAuth();
+  const { user, isAuthenticated, login, verify2fa, refreshUser, register, logout, updateProfile } = useAuth();
 
   // Mode: 'login' or 'register'
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'login';
@@ -66,6 +66,13 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [registeredCoupon, setRegisteredCoupon] = useState('');
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFaSetup, setTwoFaSetup] = useState(null); // { secret, otpauthUri }
+  const [twoFaVerifyCode, setTwoFaVerifyCode] = useState('');
+  const [twoFaBackupCodes, setTwoFaBackupCodes] = useState([]);
+  const [twoFaDisablePassword, setTwoFaDisablePassword] = useState('');
+  const [twoFaMessage, setTwoFaMessage] = useState('');
 
   // Customer Dashboard State (when logged in)
   const [userOrders, setUserOrders] = useState([]);
@@ -123,6 +130,24 @@ export default function AuthPage() {
     e.preventDefault();
     setError('');
 
+    if (twoFactorChallenge) {
+      if (!twoFactorCode.trim()) {
+        setError('Please enter your 6-digit authenticator code or backup code.');
+        return;
+      }
+      setLoading(true);
+      const res = await verify2fa(twoFactorChallenge, twoFactorCode.trim());
+      setLoading(false);
+      if (res.success) {
+        setTwoFactorChallenge('');
+        setTwoFactorCode('');
+        setSuccessMsg('Signed in successfully! Welcome back.');
+      } else {
+        setError(res.message || 'Invalid 2FA code.');
+      }
+      return;
+    }
+
     if (!formData.email.trim() || !formData.password) {
       setError('Please provide your email address and password.');
       return;
@@ -132,7 +157,11 @@ export default function AuthPage() {
     const res = await login(formData.email.trim(), formData.password);
     setLoading(false);
 
-    if (res.success) {
+    if (res.requires2fa && res.challengeToken) {
+      setTwoFactorChallenge(res.challengeToken);
+      setTwoFactorCode('');
+      setSuccessMsg(res.message || 'Enter your 6-digit authenticator code.');
+    } else if (res.success) {
       setSuccessMsg('Signed in successfully! Welcome back.');
     } else {
       setError(res.message || 'Invalid credentials. Please verify your email and password.');
@@ -510,6 +539,134 @@ export default function AuthPage() {
                 )}
               </div>
 
+              {/* Two-Factor Authentication (2FA) Card */}
+              <div className="bg-white rounded-xl border border-sasta-border p-5 shadow-xs space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-sasta-border pb-3">
+                  <h3 className="font-serif font-bold text-sm text-sasta-heading flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-sasta-gold-dark" />
+                    Two-Factor Auth (2FA)
+                  </h3>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${
+                    user.twoFactorEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-600'
+                  }`}>
+                    {user.twoFactorEnabled ? 'Enabled' : 'Off'}
+                  </span>
+                </div>
+
+                {twoFaMessage && (
+                  <p className="rounded bg-sasta-yellow-cream border border-sasta-border p-2.5 text-[11px] text-sasta-heading">
+                    {twoFaMessage}
+                  </p>
+                )}
+
+                {twoFaBackupCodes.length > 0 && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                    <p className="font-bold text-emerald-900">Save your single-use backup codes:</p>
+                    <div className="grid grid-cols-2 gap-1.5 font-mono text-[11px] text-emerald-950">
+                      {twoFaBackupCodes.map((c) => <span key={c} className="bg-white px-2 py-1 rounded border border-emerald-200">{c}</span>)}
+                    </div>
+                  </div>
+                )}
+
+                {user.twoFactorEnabled ? (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setTwoFaMessage('');
+                      try {
+                        await api.disable2fa({ password: twoFaDisablePassword });
+                        setTwoFaDisablePassword('');
+                        setTwoFaBackupCodes([]);
+                        await refreshUser();
+                        setTwoFaMessage('2FA disabled for your account.');
+                      } catch (err) {
+                        setTwoFaMessage(err.message);
+                      }
+                    }}
+                    className="space-y-2"
+                  >
+                    <p className="text-[11px] text-sasta-body">Your account is protected with an Authenticator app.</p>
+                    <input
+                      type="password"
+                      required
+                      value={twoFaDisablePassword}
+                      onChange={(e) => setTwoFaDisablePassword(e.target.value)}
+                      placeholder="Current password to disable"
+                      className="w-full p-2 border border-sasta-border rounded text-xs"
+                    />
+                    <button type="submit" className="w-full py-2 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold hover:bg-rose-100">
+                      Disable 2FA
+                    </button>
+                  </form>
+                ) : twoFaSetup ? (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setTwoFaMessage('');
+                      try {
+                        const res = await api.enable2fa({ secret: twoFaSetup.secret, code: twoFaVerifyCode });
+                        setTwoFaBackupCodes(res.backupCodes || []);
+                        setTwoFaSetup(null);
+                        setTwoFaVerifyCode('');
+                        await refreshUser();
+                        setTwoFaMessage('2FA enabled! Save your backup codes above.');
+                      } catch (err) {
+                        setTwoFaMessage(err.message);
+                      }
+                    }}
+                    className="space-y-2.5"
+                  >
+                    <p className="text-[11px] text-sasta-body">
+                      1. Add this key to Google Authenticator / Authy:
+                    </p>
+                    <div className="rounded bg-sasta-yellow-cream border border-sasta-border p-2 font-mono text-[11px] break-all select-all text-sasta-heading">
+                      {twoFaSetup.secret}
+                    </div>
+                    <a
+                      href={twoFaSetup.otpauthUri}
+                      className="inline-block text-[11px] font-bold text-sasta-gold-dark hover:underline"
+                    >
+                      Open in Authenticator App &rarr;
+                    </a>
+                    <input
+                      type="text"
+                      required
+                      value={twoFaVerifyCode}
+                      onChange={(e) => setTwoFaVerifyCode(e.target.value)}
+                      placeholder="Enter 6-digit code from app"
+                      className="w-full p-2 border border-sasta-border rounded text-xs tracking-widest"
+                    />
+                    <div className="flex gap-2">
+                      <button type="submit" className="flex-1 py-2 rounded bg-sasta-navy text-white font-bold">
+                        Verify &amp; Enable
+                      </button>
+                      <button type="button" onClick={() => setTwoFaSetup(null)} className="px-3 py-2 rounded border border-sasta-border">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-sasta-body">Add extra security to your login using Google Authenticator or Authy.</p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setTwoFaMessage('');
+                        try {
+                          const setup = await api.setup2fa();
+                          setTwoFaSetup(setup);
+                        } catch (err) {
+                          setTwoFaMessage(err.message);
+                        }
+                      }}
+                      className="w-full py-2 rounded bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading font-bold uppercase tracking-wider"
+                    >
+                      Enable 2FA Security
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Support & Assistance Card */}
               <div className="bg-sasta-yellow-cream/50 rounded-xl border border-sasta-border p-5 text-xs space-y-3">
                 <div className="flex items-center gap-2 text-sasta-navy font-serif font-bold text-sm">
@@ -748,6 +905,31 @@ export default function AuthPage() {
                 </p>
               </div>
 
+              {twoFactorChallenge ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-sasta-heading">
+                      Authenticator or Backup Code
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      placeholder="Enter 6-digit code (e.g. 123456)"
+                      className="w-full px-3.5 py-3 border border-sasta-border rounded-lg text-sm tracking-widest bg-white focus:outline-none focus:border-sasta-gold text-sasta-heading"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setTwoFactorChallenge(''); setTwoFactorCode(''); setError(''); setSuccessMsg(''); }}
+                    className="text-xs font-semibold text-sasta-gold-dark hover:underline"
+                  >
+                    &larr; Back to Email &amp; Password
+                  </button>
+                </div>
+              ) : (
+                <>
               {/* Email */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-sasta-heading">
@@ -819,6 +1001,8 @@ export default function AuthPage() {
                   <span className="text-sasta-body">Keep me signed in</span>
                 </label>
               </div>
+                </>
+              )}
 
               {/* Submit CTA */}
               <button

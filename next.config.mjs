@@ -12,7 +12,7 @@ const contentSecurityPolicy = [
   'frame-src https://js.stripe.com https://hooks.stripe.com',
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://cdn.shopify.com https://*.supabase.co https://*.stripe.com",
+  "img-src 'self' data: blob: https://res.cloudinary.com https://cdn.shopify.com https://*.supabase.co https://*.stripe.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -26,6 +26,7 @@ const nextConfig = {
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: 'cdn.shopify.com' },
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: '*.stripe.com' }

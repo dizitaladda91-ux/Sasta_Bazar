@@ -8,7 +8,13 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import { inTransaction, pool, query } from './db.js';
-import { clearAuthCookie, optionalAuth, requireAdmin, requireAuth, setAuthCookie } from './middleware/auth.js';
+import {
+  clearAuthCookie, optionalAuth, requireAdmin, requireAuth, setAuthCookie,
+  signTwoFactorChallenge, verifyTwoFactorChallenge
+} from './middleware/auth.js';
+import {
+  buildOtpAuthUri, consumeBackupCode, generateBackupCodes, generateTotpSecret, verifyTotpCode
+} from './services/twoFactor.js';
 import { validate } from './middleware/validate.js';
 import {
   checkoutBody, contactBody, customizationBody, loginBody, newsletterBody, orderIdParams,
@@ -20,6 +26,8 @@ import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from '.
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
 import { sendAdminNewOrderAlert, sendOrderConfirmationEmail, sendOrderDispatchedEmail } from './services/email.js';
+import { appCache, TTL } from './services/cache.js';
+import { sessionStore } from './services/sessionStore.js';
 import { verifyPassword } from './services/passwordRules.js';
 import { calculateCouponDiscount, hasCouponUsageAvailable } from './services/couponRules.js';
 import { getReservationLockKeys, hasReservationCapacity } from './services/reservationRules.js';
@@ -320,79 +328,126 @@ async function createProduct(client, input) {
   return productId;
 }
 
+const invalidateCatalogCache = () => {
+  appCache.invalidatePrefix('products:');
+  appCache.invalidatePrefix('product:');
+  appCache.invalidatePrefix('categories:');
+};
+
 app.get('/api/products', validate({ query: productsQuery }), route(async (req, res) => {
   const { page, limit, category, subcategory, search, filter, sort, collection } = req.validated.query;
   const currentPage = page ?? 1;
   const pageSize = limit ?? 100;
-  const values = [];
-  const filters = [];
-  const addFilter = (sql, value) => {
-    values.push(value);
-    filters.push(sql.replace(/\?/g, `$${values.length}`));
-  };
-  if (search) addFilter(`(p.title ILIKE '%' || ? || '%' OR p.handle ILIKE '%' || ? || '%' OR c.name ILIKE '%' || ? || '%')`, search);
-  if (category && category !== 'All') addFilter(`(c.name = ? OR parent.name = ?)`, category);
-  if (subcategory) addFilter(`c.name = ?`, subcategory);
-  if (collection) addFilter(`p.collection_slug = ?`, collection);
-  if (filter === 'sale') filters.push('p.discount_percent > 0');
-  if (filter === 'new') filters.push('p.is_new_arrival = TRUE');
-  if (filter === 'best-seller') filters.push('p.is_best_seller = TRUE');
-  const orderBy = {
-    'price-low': 'ORDER BY p.price ASC, p.id',
-    'price-high': 'ORDER BY p.price DESC, p.id',
-    discount: 'ORDER BY p.discount_percent DESC, p.id',
-    newest: 'ORDER BY p.is_new_arrival DESC, p.created_at DESC, p.id'
-  }[sort] || 'ORDER BY p.created_at DESC, p.id';
-  const where = filters.length ? `AND ${filters.join(' AND ')}` : '';
-  const count = await query(
-    `SELECT COUNT(DISTINCT p.id)::int AS total
-     FROM products p
-     LEFT JOIN categories c ON c.id = p.category_id
-     LEFT JOIN categories parent ON parent.id = c.parent_id
-     WHERE p.is_active = TRUE ${where}`,
-    values
-  );
-  const total = count.rows[0].total;
-  const products = await getProducts(
-    where,
-    values,
-    orderBy,
-    { page: currentPage, limit: pageSize }
-  );
-  const response = {
-    success: true,
-    count: products.length,
-    total,
-    page: currentPage,
-    pages: Math.ceil(total / pageSize),
-    products
-  };
+  const cacheKey = `products:${JSON.stringify({
+    page: currentPage, limit: pageSize, category: category || '', subcategory: subcategory || '',
+    search: search || '', filter: filter || '', sort: sort || '', collection: collection || ''
+  })}`;
+
+  const { value: response, hit } = await appCache.getOrSet(cacheKey, TTL.FIVE_MIN, async () => {
+    const values = [];
+    const filters = [];
+    const addFilter = (sql, value) => {
+      values.push(value);
+      filters.push(sql.replace(/\?/g, `$${values.length}`));
+    };
+    if (search) addFilter(`(p.title ILIKE '%' || ? || '%' OR p.handle ILIKE '%' || ? || '%' OR c.name ILIKE '%' || ? || '%')`, search);
+    if (category && category !== 'All') addFilter(`(c.name = ? OR parent.name = ?)`, category);
+    if (subcategory) addFilter(`c.name = ?`, subcategory);
+    if (collection) addFilter(`p.collection_slug = ?`, collection);
+    if (filter === 'sale') filters.push('p.discount_percent > 0');
+    if (filter === 'new') filters.push('p.is_new_arrival = TRUE');
+    if (filter === 'best-seller') filters.push('p.is_best_seller = TRUE');
+    const orderBy = {
+      'price-low': 'ORDER BY p.price ASC, p.id',
+      'price-high': 'ORDER BY p.price DESC, p.id',
+      discount: 'ORDER BY p.discount_percent DESC, p.id',
+      newest: 'ORDER BY p.is_new_arrival DESC, p.created_at DESC, p.id'
+    }[sort] || 'ORDER BY p.created_at DESC, p.id';
+    const where = filters.length ? `AND ${filters.join(' AND ')}` : '';
+    const count = await query(
+      `SELECT COUNT(DISTINCT p.id)::int AS total
+       FROM products p
+       LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN categories parent ON parent.id = c.parent_id
+       WHERE p.is_active = TRUE ${where}`,
+      values
+    );
+    const total = count.rows[0].total;
+    const products = await getProducts(
+      where,
+      values,
+      orderBy,
+      { page: currentPage, limit: pageSize }
+    );
+    return {
+      success: true,
+      count: products.length,
+      total,
+      page: currentPage,
+      pages: Math.ceil(total / pageSize),
+      products
+    };
+  });
+
+  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
   res.json(response);
 }));
 
 app.get('/api/products/:handle', route(async (req, res) => {
-  const products = await getProducts('AND (p.handle = $1 OR p.external_id = $1)', [req.params.handle]);
-  if (!products.length) return res.status(404).json({ success: false, message: `Product "${req.params.handle}" not found` });
-  res.json({ success: true, product: products[0] });
+  const cacheKey = `product:${req.params.handle}`;
+  const { value: product, hit } = await appCache.getOrSet(cacheKey, TTL.FIVE_MIN, async () => {
+    const products = await getProducts('AND (p.handle = $1 OR p.external_id = $1)', [req.params.handle]);
+    return products[0] || null;
+  });
+  if (!product) return res.status(404).json({ success: false, message: `Product "${req.params.handle}" not found` });
+  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
+  res.json({ success: true, product });
 }));
 
 app.get('/api/categories', route(async (_req, res) => {
-  const { rows } = await query(`
-    SELECT parent.name, parent.slug, parent.description,
-           COUNT(DISTINCT p.id)::int AS count,
-           COALESCE(array_agg(DISTINCT child.name) FILTER (WHERE child.name IS NOT NULL), '{}') AS subcategories
-    FROM categories parent
-    LEFT JOIN categories child ON child.parent_id = parent.id
-    LEFT JOIN products p ON p.category_id = child.id AND p.is_active = TRUE
-    WHERE parent.parent_id IS NULL GROUP BY parent.id ORDER BY parent.sort_order, parent.name
-  `);
-  res.json({ success: true, categories: rows.map(({ name, slug, description, count, subcategories }) => ({ name, slug, description, count, subcategories })) });
+  const { value: categories, hit } = await appCache.getOrSet('categories:all', TTL.FIFTEEN_MIN, async () => {
+    const { rows } = await query(`
+      SELECT parent.name, parent.slug, parent.description,
+             COUNT(DISTINCT p.id)::int AS count,
+             COALESCE(array_agg(DISTINCT child.name) FILTER (WHERE child.name IS NOT NULL), '{}') AS subcategories
+      FROM categories parent
+      LEFT JOIN categories child ON child.parent_id = parent.id
+      LEFT JOIN products p ON p.category_id = child.id AND p.is_active = TRUE
+      WHERE parent.parent_id IS NULL GROUP BY parent.id ORDER BY parent.sort_order, parent.name
+    `);
+    return rows.map(({ name, slug, description, count, subcategories }) => ({ name, slug, description, count, subcategories }));
+  });
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=1800');
+  res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
+  res.json({ success: true, categories });
 }));
 
 app.get('/api/storefront/content/:key', route(async (req, res) => {
-  const { rows } = await query('SELECT content FROM storefront_content WHERE content_key = $1', [req.params.key]);
-  if (!rows.length) return res.status(404).json({ success: false, message: 'Store content was not found.' });
-  res.json({ success: true, content: withoutImages(rows[0].content) });
+  const cacheKey = `content:${req.params.key}`;
+  const { value: content, hit } = await appCache.getOrSet(cacheKey, TTL.FIFTEEN_MIN, async () => {
+    const { rows } = await query('SELECT content FROM storefront_content WHERE content_key = $1', [req.params.key]);
+    return rows.length ? withoutImages(rows[0].content) : null;
+  });
+  if (!content) return res.status(404).json({ success: false, message: 'Store content was not found.' });
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=1800');
+  res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
+  res.json({ success: true, content });
+}));
+
+app.get('/api/config', route(async (_req, res) => {
+  const { value: config, hit } = await appCache.getOrSet('site:config', TTL.FIFTEEN_MIN, async () => ({
+    siteName: 'SASTA BAZAAR - Everyday Luxury',
+    currency: 'GBP',
+    symbol: '£',
+    freeShippingThreshold: Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD || 40),
+    standardShipping: 3.99,
+    rates: { GBP: 1, INR: 108, USD: 1.27, EUR: 1.17 }
+  }));
+  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=1800');
+  res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
+  res.json({ success: true, config });
 }));
 
 app.post('/api/coupons/validate', generalLimiter, route(async (req, res) => {
@@ -550,6 +605,7 @@ async function createReservedOrder({ req, customer, items, promoCode, paymentMet
         );
       }
       for (const productId of productIds) await syncProductStock(client, productId);
+      invalidateCatalogCache();
       return { id: orderId, orderRef, total };
     });
   };
@@ -712,6 +768,7 @@ function safeUser(row, address) {
     email: row.email,
     phone: row.phone,
     role: row.role,
+    twoFactorEnabled: Boolean(row.two_factor_enabled),
     joinedAt: row.created_at,
     address: address ? { street: address.street, city: address.city, postalCode: address.postal_code, country: address.country } : null
   };
@@ -762,7 +819,7 @@ app.post('/api/auth/register', registerLimiter, validate({ body: registerBody })
       return user;
     });
     const { rows } = await userWithAddress(result.email);
-    setAuthCookie(res, result);
+    await setAuthCookie(res, result);
     res.status(201).json({ success: true, message: 'Welcome to Sasta Bazaar! Your account has been created.',
       user: safeUser(rows[0], rows[0].street == null ? null : rows[0]), couponCode: 'WELCOME10' });
   } catch (error) {
@@ -777,14 +834,103 @@ app.post('/api/auth/login', loginLimiter, validate({ body: loginBody }), route(a
   if (!(await verifyPassword(password, rows[0]?.password_hash))) {
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });
   }
-  setAuthCookie(res, rows[0]);
+  if (rows[0].two_factor_enabled && rows[0].two_factor_secret) {
+    return res.json({
+      success: true,
+      requires2fa: true,
+      challengeToken: signTwoFactorChallenge(rows[0]),
+      message: 'Enter your 6-digit authenticator code to complete sign in.'
+    });
+  }
+  await setAuthCookie(res, rows[0]);
   res.json({ success: true, message: 'Signed in successfully!', user: safeUser(rows[0], rows[0].street == null ? null : rows[0]) });
 }));
 
-app.post('/api/auth/logout', (_req, res) => {
-  clearAuthCookie(res);
+app.post('/api/auth/2fa/verify-login', loginLimiter, route(async (req, res) => {
+  const challengeToken = String(req.body?.challengeToken || '');
+  const code = String(req.body?.code || '').trim();
+  if (!challengeToken || !code) {
+    return res.status(400).json({ success: false, message: 'Verification code is required.' });
+  }
+  let payload;
+  try {
+    payload = verifyTwoFactorChallenge(challengeToken);
+  } catch {
+    return res.status(401).json({ success: false, message: '2FA session expired. Please sign in again.' });
+  }
+  const { rows } = await userWithAddressById(payload.sub);
+  if (!rows.length || !rows[0].two_factor_enabled || !rows[0].two_factor_secret) {
+    return res.status(401).json({ success: false, message: '2FA is not active for this account.' });
+  }
+  const userRow = rows[0];
+  let valid = verifyTotpCode(userRow.two_factor_secret, code);
+  if (!valid) {
+    const backup = await consumeBackupCode(code, userRow.two_factor_backup_hashes || []);
+    if (backup.matched) {
+      valid = true;
+      await query('UPDATE users SET two_factor_backup_hashes=$2, updated_at=NOW() WHERE id=$1', [userRow.id, backup.remainingHashes]);
+    }
+  }
+  if (!valid) {
+    return res.status(401).json({ success: false, message: 'Invalid 2FA or backup code.' });
+  }
+  await setAuthCookie(res, userRow);
+  return res.json({ success: true, message: 'Signed in successfully!', user: safeUser(userRow, userRow.street == null ? null : userRow) });
+}));
+
+app.post('/api/auth/2fa/setup', requireAuth, route(async (req, res) => {
+  const secret = generateTotpSecret();
+  const otpauthUri = buildOtpAuthUri({ email: req.user.email, secret });
+  return res.json({ success: true, secret, otpauthUri });
+}));
+
+app.post('/api/auth/2fa/enable', requireAuth, route(async (req, res) => {
+  const secret = String(req.body?.secret || '').trim().toUpperCase();
+  const code = String(req.body?.code || '').trim();
+  if (!secret || !verifyTotpCode(secret, code)) {
+    return res.status(400).json({ success: false, message: 'Invalid 6-digit code. Check your authenticator app time and try again.' });
+  }
+  const { plainCodes, hashes } = await generateBackupCodes(6);
+  await query(
+    `UPDATE users SET two_factor_enabled=TRUE, two_factor_secret=$2, two_factor_backup_hashes=$3, updated_at=NOW()
+     WHERE id=$1`,
+    [req.user.id, secret, hashes]
+  );
+  return res.json({ success: true, message: 'Two-factor authentication enabled!', backupCodes: plainCodes });
+}));
+
+app.post('/api/auth/2fa/disable', requireAuth, route(async (req, res) => {
+  const password = String(req.body?.password || '');
+  if (!password) {
+    return res.status(400).json({ success: false, message: 'Current password is required to disable 2FA.' });
+  }
+  const { rows } = await query('SELECT password_hash FROM users WHERE id=$1', [req.user.id]);
+  if (!(await verifyPassword(password, rows[0]?.password_hash))) {
+    return res.status(401).json({ success: false, message: 'Incorrect password.' });
+  }
+  await query(
+    `UPDATE users SET two_factor_enabled=FALSE, two_factor_secret='', two_factor_backup_hashes='{}', updated_at=NOW()
+     WHERE id=$1`,
+    [req.user.id]
+  );
+  return res.json({ success: true, message: 'Two-factor authentication disabled.' });
+}));
+
+app.post('/api/auth/logout', route(async (req, res) => {
+  await clearAuthCookie(res, req);
   res.json({ success: true, message: 'Signed out successfully.' });
-});
+}));
+
+app.get('/api/auth/sessions', requireAuth, route(async (req, res) => {
+  const activeSessions = await sessionStore.countUserSessions(req.user.id);
+  res.json({ success: true, activeSessions, backend: sessionStore.backendKind });
+}));
+
+app.post('/api/auth/logout-all', requireAuth, route(async (req, res) => {
+  const revoked = await sessionStore.revokeAllUserSessions(req.user.id);
+  await clearAuthCookie(res);
+  res.json({ success: true, revoked, message: 'Signed out from all devices.' });
+}));
 
 app.get('/api/auth/me', requireAuth, route(async (req, res) => {
   const { rows } = await userWithAddressById(req.user.id);
@@ -911,6 +1057,7 @@ app.patch('/api/admin/orders/:orderId', validate({ params: orderIdParams, body: 
 
 app.post('/api/admin/products', validate({ body: productCreateBody }), route(async (req, res) => {
   const productId = await inTransaction((client) => createProduct(client, req.validated.body));
+  invalidateCatalogCache();
   const product = (await getProducts('AND p.id=$1', [productId]))[0];
   res.status(201).json({ success: true, message: 'Product added successfully', product });
 }));
@@ -986,6 +1133,7 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
     }
     await syncProductStock(client, productId);
   });
+  invalidateCatalogCache();
   const product = (await getProducts('AND p.id=$1', [productId]))[0];
   res.json({ success: true, message: 'Product updated successfully', product });
 }));
@@ -1013,8 +1161,14 @@ app.delete('/api/admin/products/:id', route(async (req, res) => {
     [req.params.id]
   );
   if (!result.rowCount) return res.status(404).json({ success: false, message: 'Product not found' });
+  invalidateCatalogCache();
   res.json({ success: true, message: 'Product deleted successfully' });
 }));
+
+app.post('/api/admin/cache/clear', (_req, res) => {
+  appCache.clear();
+  res.json({ success: true, message: 'Server cache cleared.' });
+});
 
 app.get('/api/admin/inquiries', validate({ query: pageQuery }), route(async (req, res) => {
   const { page, limit } = req.validated.query;

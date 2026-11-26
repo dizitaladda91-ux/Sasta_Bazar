@@ -1,5 +1,7 @@
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
+import { sessionStore } from '../services/sessionStore.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -13,16 +15,48 @@ const tokenOptions = {
   path: '/'
 };
 
-export function setAuthCookie(res, user) {
+export async function setAuthCookie(res, user) {
+  const jti = crypto.randomUUID();
+  await sessionStore.createSession({
+    jti,
+    userId: user.id,
+    role: user.role,
+    email: user.email
+  });
   const token = jwt.sign(
-    { sub: String(user.id), role: user.role, email: user.email },
+    { sub: String(user.id), role: user.role, email: user.email, jti },
     JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
   res.cookie('sb_token', token, { ...tokenOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
 }
 
-export function clearAuthCookie(res) {
+export function signTwoFactorChallenge(user) {
+  return jwt.sign(
+    { sub: String(user.id), purpose: '2fa' },
+    JWT_SECRET,
+    { expiresIn: '5m' }
+  );
+}
+
+export function verifyTwoFactorChallenge(token) {
+  const payload = jwt.verify(token, JWT_SECRET);
+  if (!payload || typeof payload !== 'object' || payload.purpose !== '2fa' || !payload.sub) {
+    throw Object.assign(new Error('Invalid or expired 2FA challenge.'), { status: 401 });
+  }
+  return payload;
+}
+
+export async function clearAuthCookie(res, req = null) {
+  const token = req?.cookies?.sb_token;
+  if (token) {
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload?.jti) await sessionStore.revokeSession(payload.jti, payload.sub);
+    } catch {
+      // Token may already be expired or invalid.
+    }
+  }
   res.clearCookie('sb_token', tokenOptions);
 }
 
@@ -30,6 +64,7 @@ export async function optionalAuth(req, _res, next) {
   const token = req.cookies?.sb_token;
   if (!token) {
     req.user = null;
+    req.sessionJti = null;
     return next();
   }
 
@@ -37,7 +72,17 @@ export async function optionalAuth(req, _res, next) {
     const payload = jwt.verify(token, JWT_SECRET);
     if (!payload || typeof payload !== 'object' || !payload.sub) {
       req.user = null;
+      req.sessionJti = null;
       return next();
+    }
+
+    if (payload.jti) {
+      const session = await sessionStore.getSession(payload.jti);
+      if (!session) {
+        req.user = null;
+        req.sessionJti = null;
+        return next();
+      }
     }
 
     const result = await query(
@@ -45,10 +90,12 @@ export async function optionalAuth(req, _res, next) {
       [payload.sub]
     );
     req.user = result.rows[0] || null;
+    req.sessionJti = payload.jti || null;
     return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       req.user = null;
+      req.sessionJti = null;
       return next();
     }
     return next(error);

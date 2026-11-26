@@ -52,6 +52,8 @@ function toLocalInputValue(iso) {
 export default function BlogAdminClient() {
   const [authState, setAuthState] = useState({ loading: true, user: null });
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [twoFaChallenge, setTwoFaChallenge] = useState('');
+  const [twoFaCode, setTwoFaCode] = useState('');
   const [loginError, setLoginError] = useState('');
 
   const [posts, setPosts] = useState([]);
@@ -105,15 +107,28 @@ export default function BlogAdminClient() {
     e.preventDefault();
     setLoginError('');
     try {
-      const res = await apiJson('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginForm)
-      });
+      const res = twoFaChallenge
+        ? await apiJson('/api/auth/2fa/verify-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ challengeToken: twoFaChallenge, code: twoFaCode })
+          })
+        : await apiJson('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(loginForm)
+          });
+
+      if (res.requires2fa && res.challengeToken) {
+        setTwoFaChallenge(res.challengeToken);
+        setTwoFaCode('');
+        return;
+      }
       if (res.user?.role !== 'admin') {
         setLoginError('Administrator access is required.');
         return;
       }
+      setTwoFaChallenge('');
       setAuthState({ loading: false, user: res.user });
     } catch (err) {
       setLoginError(err.message);
@@ -329,32 +344,57 @@ export default function BlogAdminClient() {
           )}
 
           <div className="mt-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-sasta-heading mb-1">Admin Email</label>
-              <input
-                type="email"
-                required
-                value={loginForm.email}
-                onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))}
-                className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm focus:border-sasta-gold focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-sasta-heading mb-1">Password</label>
-              <input
-                type="password"
-                required
-                value={loginForm.password}
-                onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))}
-                className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm focus:border-sasta-gold focus:outline-none"
-              />
-            </div>
+            {twoFaChallenge ? (
+              <div>
+                <label className="block text-xs font-semibold text-sasta-heading mb-1">2FA Authenticator / Backup Code</label>
+                <input
+                  type="text"
+                  required
+                  value={twoFaCode}
+                  onChange={(e) => setTwoFaCode(e.target.value)}
+                  placeholder="123456"
+                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm tracking-widest focus:border-sasta-gold focus:outline-none"
+                />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-sasta-heading mb-1">Admin Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))}
+                    className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm focus:border-sasta-gold focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-sasta-heading mb-1">Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))}
+                    className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm focus:border-sasta-gold focus:outline-none"
+                  />
+                </div>
+              </>
+            )}
             <button
               type="submit"
               className="w-full rounded-full bg-sasta-gold py-2.5 text-xs font-bold uppercase tracking-wider text-sasta-heading hover:bg-sasta-gold-hover"
             >
-              Sign In to Blog Admin
+              {twoFaChallenge ? 'Verify 2FA Code' : 'Sign In to Blog Admin'}
             </button>
+            {twoFaChallenge && (
+              <button
+                type="button"
+                onClick={() => { setTwoFaChallenge(''); setTwoFaCode(''); setLoginError(''); }}
+                className="w-full text-xs text-sasta-muted hover:text-sasta-heading"
+              >
+                &larr; Back to Email &amp; Password
+              </button>
+            )}
           </div>
         </form>
       </div>

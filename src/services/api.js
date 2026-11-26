@@ -56,6 +56,10 @@ export const api = {
   async deleteProduct(id) { return request(`/admin/products/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
   async register(payload) { return request('/auth/register', json('POST', payload)); },
   async login(payload) { return request('/auth/login', json('POST', payload)); },
+  async verify2faLogin(payload) { return request('/auth/2fa/verify-login', json('POST', payload)); },
+  async setup2fa() { return request('/auth/2fa/setup', { method: 'POST' }); },
+  async enable2fa(payload) { return request('/auth/2fa/enable', json('POST', payload)); },
+  async disable2fa(payload) { return request('/auth/2fa/disable', json('POST', payload)); },
   async getMe() { return request('/auth/me'); },
   async logout() { return request('/auth/logout', { method: 'POST' }); },
   async getUserOrders() {

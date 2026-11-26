@@ -31,6 +31,7 @@ import {
   generalLimiter, loginLimiter, registerLimiter, contactLimiter,
   customizationLimiter, newsletterLimiter, trackLimiter, checkoutLimiter
 } from './middleware/ratelimit.js';
+import blogAdminRouter from './routes/blog.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -63,6 +64,8 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json', limit: 
   const processed = await processStripeEvent(event);
   return res.json({ received: true, duplicate: !processed });
 }));
+
+app.use('/api/admin/blog', express.json({ limit: '5mb' }), blogAdminRouter);
 
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());

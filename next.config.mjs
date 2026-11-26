@@ -23,6 +23,14 @@ const contentSecurityPolicy = [
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: root,
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'cdn.shopify.com' },
+      { protocol: 'https', hostname: '*.supabase.co' },
+      { protocol: 'https', hostname: '*.stripe.com' }
+    ]
+  },
   async headers() {
     const headers = [
       { key: 'Content-Security-Policy', value: contentSecurityPolicy },

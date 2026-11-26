@@ -1,8 +1,0 @@
-# robots.txt for SASTA BAZAAR - Everyday Luxury
-User-agent: *
-Allow: /
-Disallow: /admin
-Disallow: /cart
-Disallow: /track-order
-
-Sitemap: https://sastabazaarclothing.com/sitemap.xml

@@ -19,6 +19,7 @@ import { getStripe } from './services/stripe.js';
 import { releaseStaleOrders, restoreOrderReservation, syncProductStock } from './services/orders.js';
 import { issueOrderRefund } from './services/refunds.js';
 import { processStripeEvent } from './services/stripe-webhook.js';
+import { sendAdminNewOrderAlert, sendOrderConfirmationEmail, sendOrderDispatchedEmail } from './services/email.js';
 import { verifyPassword } from './services/passwordRules.js';
 import { calculateCouponDiscount, hasCouponUsageAvailable } from './services/couponRules.js';
 import { getReservationLockKeys, hasReservationCapacity } from './services/reservationRules.js';
@@ -394,11 +395,42 @@ app.get('/api/storefront/content/:key', route(async (req, res) => {
   res.json({ success: true, content: withoutImages(rows[0].content) });
 }));
 
-app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, validate({ body: checkoutBody }), route(async (req, res) => {
-  const { customer, items, promoCode } = req.validated.body;
+app.post('/api/coupons/validate', generalLimiter, route(async (req, res) => {
+  const code = String(req.body?.code || '').trim();
+  const subtotal = Number(req.body?.subtotal || 0);
+  if (!code) {
+    return res.status(400).json({ success: false, message: 'Please enter a promo code.' });
+  }
+  const { rows } = await query(
+    `SELECT id, code, discount_type, discount_value, minimum_order, max_redemptions, redemption_count
+     FROM coupons
+     WHERE UPPER(code)=UPPER($1) AND is_active=TRUE
+       AND (starts_at IS NULL OR starts_at <= NOW())
+       AND (expires_at IS NULL OR expires_at > NOW())
+     LIMIT 1`,
+    [code]
+  );
+  const coupon = rows[0];
+  if (!coupon) {
+    return res.status(404).json({ success: false, message: 'This promo code is invalid or expired.' });
+  }
+  if (!hasCouponUsageAvailable(coupon, 0)) {
+    return res.status(400).json({ success: false, message: 'This promo code has reached its redemption limit.' });
+  }
+  const discount = money(calculateCouponDiscount(Math.max(0, subtotal), coupon));
+  return res.json({
+    success: true,
+    code: coupon.code,
+    discount,
+    discountType: coupon.discount_type,
+    discountValue: Number(coupon.discount_value),
+    message: `Promo ${coupon.code} applied (-£${discount.toFixed(2)})`
+  });
+}));
+
+async function createReservedOrder({ req, customer, items, promoCode, paymentMethod = 'Stripe', orderStatus = 'Awaiting Payment' }) {
   const orderedItems = sortCheckoutItems(items);
-  const stripe = getStripe();
-  const createPendingOrder = async () => {
+  const attemptCreate = () => {
     const orderRef = createOrderReference();
     return inTransaction(async (client) => {
       const customerIp = req.ip || '';
@@ -409,7 +441,7 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
         `SELECT COUNT(*) FILTER (WHERE LOWER(customer_email)=LOWER($1))::int AS email_count,
                 COUNT(*) FILTER (WHERE customer_ip=$2)::int AS ip_count
          FROM orders
-         WHERE payment_status='Pending' AND created_at > NOW() - INTERVAL '30 minutes'
+         WHERE payment_status='Pending' AND payment_method='Stripe' AND created_at > NOW() - INTERVAL '30 minutes'
            AND (LOWER(customer_email)=LOWER($1) OR customer_ip=$2)`,
         [customer.email, customerIp]
       );
@@ -480,7 +512,7 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
         }
         const pending = await client.query(
           `SELECT COUNT(*)::int AS count FROM orders
-           WHERE coupon_id=$1 AND payment_status='Pending'
+           WHERE coupon_id=$1 AND payment_status='Pending' AND payment_method='Stripe'
              AND created_at > NOW() - INTERVAL '30 minutes'`,
           [coupon.id]
         );
@@ -495,12 +527,15 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
         `INSERT INTO orders
           (order_ref,user_id,coupon_id,customer_name,customer_email,customer_ip,customer_phone,shipping_address,shipping_city,
            shipping_postcode,subtotal,shipping,discount,total,payment_method,payment_status,order_status,courier)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Stripe','Pending','Awaiting Payment','Royal Mail Tracked 48')
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Pending',$16,'Royal Mail Tracked 48')
          RETURNING id`,
         [orderRef, req.user?.id || null, coupon?.id || null, customer.name, customer.email, customerIp, customer.phone,
-          customer.address, customer.city, customer.postcode, subtotal, shipping, discount, total]
+          customer.address, customer.city, customer.postcode, subtotal, shipping, discount, total, paymentMethod, orderStatus]
       );
       const orderId = inserted.rows[0].id;
+      if (paymentMethod === 'COD' && coupon?.id != null) {
+        await client.query('UPDATE coupons SET redemption_count=redemption_count+1 WHERE id=$1', [coupon.id]);
+      }
       const productIds = new Set();
       for (const { product, variant, quantity, unitPrice } of resolvedItems) {
         await client.query('UPDATE variants SET stock=stock-$2 WHERE id=$1', [variant.id, quantity]);
@@ -519,15 +554,57 @@ app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, v
     });
   };
 
-  let pendingOrder;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      pendingOrder = await createPendingOrder();
-      break;
+      return await attemptCreate();
     } catch (error) {
       if (error.code !== '23505' || error.constraint !== 'orders_order_ref_key' || attempt === 2) throw error;
     }
   }
+}
+
+app.post('/api/checkout/cod', checkoutLimiter, optionalAuth, validate({ body: checkoutBody }), route(async (req, res) => {
+  const { customer, items, promoCode } = req.validated.body;
+  const order = await createReservedOrder({
+    req,
+    customer,
+    items,
+    promoCode,
+    paymentMethod: 'COD',
+    orderStatus: 'Processing'
+  });
+
+  const emailPayload = {
+    orderRef: order.orderRef,
+    customerName: customer.name,
+    customerEmail: customer.email,
+    total: order.total,
+    paymentMethod: 'COD'
+  };
+  await Promise.allSettled([
+    sendOrderConfirmationEmail(emailPayload),
+    sendAdminNewOrderAlert(emailPayload)
+  ]);
+
+  return res.status(201).json({
+    success: true,
+    orderId: order.orderRef,
+    total: order.total,
+    paymentMethod: 'COD'
+  });
+}));
+
+app.post('/api/checkout/create-payment-intent', checkoutLimiter, optionalAuth, validate({ body: checkoutBody }), route(async (req, res) => {
+  const { customer, items, promoCode } = req.validated.body;
+  const stripe = getStripe();
+  const pendingOrder = await createReservedOrder({
+    req,
+    customer,
+    items,
+    promoCode,
+    paymentMethod: 'Stripe',
+    orderStatus: 'Awaiting Payment'
+  });
 
   let paymentIntent;
   try {
@@ -790,22 +867,46 @@ app.patch('/api/admin/orders/:orderId', validate({ params: orderIdParams, body: 
   const { orderStatus, trackingNumber, courier } = req.validated.body;
   const updated = await inTransaction(async (client) => {
     const current = await client.query(
-      'SELECT id,order_status,payment_status FROM orders WHERE order_ref=$1 FOR UPDATE',
+      'SELECT id,order_ref,customer_name,customer_email,order_status,payment_status,payment_method FROM orders WHERE order_ref=$1 FOR UPDATE',
       [normalizeOrderReference(req.validated.params.orderId)]
     );
-    if (!current.rowCount) return false;
+    if (!current.rowCount) return null;
+    const row = current.rows[0];
     if (orderStatus) {
-      assertOrderStatusTransition(current.rows[0].order_status, orderStatus, current.rows[0].payment_status);
+      assertOrderStatusTransition(row.order_status, orderStatus, row.payment_status, row.payment_method);
     }
+    const markCodPaid = row.payment_method === 'COD' && orderStatus === 'Delivered' && row.payment_status !== 'Paid';
     await client.query(
-      `UPDATE orders SET order_status=COALESCE($2,order_status), tracking_number=COALESCE($3,tracking_number),
-         courier=COALESCE($4,courier) WHERE id=$1`,
-      [current.rows[0].id, orderStatus || null, trackingNumber || null, courier || null]
+      `UPDATE orders
+       SET order_status=COALESCE($2,order_status),
+           tracking_number=COALESCE($3,tracking_number),
+           courier=COALESCE($4,courier),
+           payment_status=CASE WHEN $5 THEN 'Paid' ELSE payment_status END,
+           paid_at=CASE WHEN $5 THEN NOW() ELSE paid_at END
+       WHERE id=$1`,
+      [row.id, orderStatus || null, trackingNumber || null, courier || null, markCodPaid]
     );
-    return true;
+    return {
+      orderRef: row.order_ref,
+      customerName: row.customer_name,
+      customerEmail: row.customer_email,
+      statusChangedToDispatch: ['Dispatched', 'Shipped'].includes(orderStatus) && row.order_status !== orderStatus
+    };
   });
   if (!updated) return res.status(404).json({ success: false, message: 'Order not found' });
-  res.json({ success: true, message: 'Order status updated', order: await getOrder(req.validated.params.orderId) });
+
+  const order = await getOrder(req.validated.params.orderId);
+  if (updated.statusChangedToDispatch) {
+    await sendOrderDispatchedEmail({
+      orderRef: updated.orderRef,
+      customerName: updated.customerName,
+      customerEmail: updated.customerEmail,
+      orderStatus: order.orderStatus,
+      trackingNumber: order.trackingNumber,
+      courier: order.courier
+    });
+  }
+  res.json({ success: true, message: 'Order status updated', order });
 }));
 
 app.post('/api/admin/products', validate({ body: productCreateBody }), route(async (req, res) => {

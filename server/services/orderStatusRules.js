@@ -7,8 +7,8 @@ const transitions = {
   Cancelled: []
 };
 
-export function assertOrderStatusTransition(currentStatus, nextStatus, paymentStatus) {
-  if (['Shipped', 'Dispatched', 'Delivered'].includes(nextStatus) && paymentStatus !== 'Paid') {
+export function assertOrderStatusTransition(currentStatus, nextStatus, paymentStatus, paymentMethod = 'Stripe') {
+  if (['Shipped', 'Dispatched', 'Delivered'].includes(nextStatus) && paymentStatus !== 'Paid' && paymentMethod !== 'COD') {
     throw Object.assign(new Error('An order must be paid before it can be shipped or delivered.'), { status: 409 });
   }
   if (nextStatus === currentStatus) return;

@@ -175,13 +175,13 @@ export default function MobileNav({ isOpen, onClose }) {
             </Link>
           </div>
           <div className="px-4 py-2">
-            <Link
-              to="/articles"
+            <a
+              href="/blog"
               onClick={handleLinkClick}
               className="block text-sm font-semibold uppercase tracking-wider text-sasta-heading hover:text-sasta-gold-dark py-1"
             >
-              Our Articles
-            </Link>
+              Blog &amp; Style Guides
+            </a>
           </div>
           <div className="px-4 py-2">
             <Link

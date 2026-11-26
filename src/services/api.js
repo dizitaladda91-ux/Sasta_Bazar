@@ -29,6 +29,12 @@ export const api = {
   async createPaymentIntent(payload) {
     return request('/checkout/create-payment-intent', json('POST', payload));
   },
+  async placeCodOrder(payload) {
+    return request('/checkout/cod', json('POST', payload));
+  },
+  async validateCoupon(payload) {
+    return request('/coupons/validate', json('POST', payload));
+  },
   async trackOrder(orderId, email) {
     const query = email ? `?email=${encodeURIComponent(email)}` : '';
     const result = await request(`/orders/${encodeURIComponent(orderId)}${query}`);

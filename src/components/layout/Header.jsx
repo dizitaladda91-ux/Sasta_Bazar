@@ -185,15 +185,15 @@ export default function Header() {
                 </Link>
               </li>
               <li>
-                <Link
-                  to="/articles"
-                  aria-current={location.pathname === '/articles' ? 'page' : undefined}
+                <a
+                  href="/blog"
+                  aria-current={location.pathname.startsWith('/blog') ? 'page' : undefined}
                   className={`whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#8d6b36] ${
-                    location.pathname === '/articles' ? 'text-[#8d6b36]' : 'text-[#34312e]'
+                    location.pathname.startsWith('/blog') ? 'text-[#8d6b36]' : 'text-[#34312e]'
                   }`}
                 >
-                  Our Articles
-                </Link>
+                  Blog
+                </a>
               </li>
               <li>
                 <Link

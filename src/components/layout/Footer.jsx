@@ -205,6 +205,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <a href="/blog" className="hover:text-sasta-gold-dark transition-colors">
+                  Style Journal (Blog)
+                </a>
+              </li>
+              <li>
                 <Link to="/wishlist" className="hover:text-sasta-gold-dark transition-colors">
                   My Wishlist
                 </Link>

@@ -112,6 +112,7 @@ export default function CartPage() {
   const [loading, setLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [payment, setPayment] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState(stripePromise ? 'stripe' : 'cod');
 
   // Customer Checkout Details
   const { user } = useAuth();
@@ -143,20 +144,38 @@ export default function CartPage() {
     const clientSecret = params.get('payment_intent_client_secret');
     const orderId = params.get('orderId');
     if (clientSecret && orderId) {
-      setPayment({ clientSecret, orderId, total: 0 });
+      let savedTotal = 0;
+      try {
+        const raw = sessionStorage.getItem('sb_pending_checkout');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.customer) setCustomer((prev) => ({ ...prev, ...parsed.customer }));
+          if (parsed.total) savedTotal = Number(parsed.total);
+        }
+      } catch {
+        // Ignore sessionStorage errors in restricted browsers.
+      }
+      setPayment({ clientSecret, orderId, total: savedTotal });
       setCheckoutStep('checkout');
     }
   }, []);
 
-  const applyPromo = (e) => {
+  const applyPromo = async (e) => {
     e.preventDefault();
-    if (promoCode.trim().toUpperCase() === 'WELCOME10') {
-      const discount = subtotal * 0.10;
-      setDiscountAmount(discount);
-      setPromoMessage('Promo WELCOME10 applied (10% discount)');
-    } else {
+    const trimmed = promoCode.trim();
+    if (!trimmed) {
       setDiscountAmount(0);
-      setPromoMessage('Invalid promo code. Try WELCOME10');
+      setPromoMessage('Please enter a promo code.');
+      return;
+    }
+    try {
+      const res = await api.validateCoupon({ code: trimmed, subtotal });
+      setDiscountAmount(Number(res.discount || 0));
+      setPromoCode(res.code || trimmed.toUpperCase());
+      setPromoMessage(res.message || `Promo ${trimmed.toUpperCase()} applied`);
+    } catch (err) {
+      setDiscountAmount(0);
+      setPromoMessage(err.message || 'Invalid or expired promo code.');
     }
   };
 
@@ -167,19 +186,43 @@ export default function CartPage() {
     e.preventDefault();
     setCheckoutError('');
     setLoading(true);
+    const payload = {
+      customer,
+      items: cartItems.map((item) => ({
+        productId: item.id,
+        variantId: item.variantId,
+        ...(item.size ? { size: item.size } : {}),
+        ...(item.color ? { color: item.color } : {}),
+        quantity: item.quantity
+      })),
+      ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
+      shippingMethod: freeShippingRemaining <= 0 ? 'free' : 'standard'
+    };
+
     try {
-      const result = await api.createPaymentIntent({
-        customer,
-        items: cartItems.map((item) => ({
-          productId: item.id,
-          variantId: item.variantId,
-          ...(item.size ? { size: item.size } : {}),
-          ...(item.color ? { color: item.color } : {}),
-          quantity: item.quantity
-        })),
-        promoCode,
-        shippingMethod: freeShippingRemaining <= 0 ? 'free' : 'standard'
-      });
+      if (paymentMethod === 'cod') {
+        const result = await api.placeCodOrder(payload);
+        setConfirmedOrder({
+          orderId: result.orderId,
+          total: Number(result.total),
+          paymentMethod: 'Cash on Delivery (COD)',
+          customer
+        });
+        setCheckoutStep('confirmed');
+        clearCart();
+        return;
+      }
+
+      const result = await api.createPaymentIntent(payload);
+      try {
+        sessionStorage.setItem('sb_pending_checkout', JSON.stringify({
+          orderId: result.orderId,
+          total: result.total,
+          customer
+        }));
+      } catch {
+        // Ignore sessionStorage quota/privacy errors.
+      }
       setPayment({ clientSecret: result.clientSecret, orderId: result.orderId, total: result.total });
     } catch (error) {
       setCheckoutError(error.message || 'Unable to start secure checkout. Please try again.');
@@ -189,10 +232,22 @@ export default function CartPage() {
   };
 
   const handlePaymentSuccess = useCallback((paymentIntent) => {
+    let recoveredCustomer = customer;
+    try {
+      const raw = sessionStorage.getItem('sb_pending_checkout');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (!recoveredCustomer?.email && parsed.customer) recoveredCustomer = parsed.customer;
+      }
+      sessionStorage.removeItem('sb_pending_checkout');
+    } catch {
+      // Ignore sessionStorage errors.
+    }
     setConfirmedOrder({
       orderId: payment?.orderId || new URLSearchParams(window.location.search).get('orderId'),
-      total: (paymentIntent.amount_received || paymentIntent.amount || Math.round(payment?.total * 100)) / 100,
-      customer
+      total: (paymentIntent.amount_received || paymentIntent.amount || Math.round((payment?.total || 0) * 100)) / 100,
+      paymentMethod: 'Card / Online Payment',
+      customer: recoveredCustomer
     });
     setCheckoutStep('confirmed');
     clearCart();
@@ -366,15 +421,55 @@ export default function CartPage() {
                 </div>
               </div>
 
+              {/* Payment Method Selector */}
+              <div className="space-y-2">
+                <label className="block font-semibold">Payment Method *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className={`flex items-center gap-2.5 rounded-lg border p-3 cursor-pointer transition-colors ${paymentMethod === 'stripe' ? 'border-sasta-gold bg-sasta-yellow-cream' : 'border-sasta-border bg-white'}`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="stripe"
+                      checked={paymentMethod === 'stripe'}
+                      onChange={() => setPaymentMethod('stripe')}
+                      disabled={!stripePromise}
+                      className="accent-sasta-gold"
+                    />
+                    <span>
+                      <strong className="block text-sasta-heading">Pay Online (Stripe)</strong>
+                      <span className="text-[11px] text-sasta-muted">Card, Apple Pay, Google Pay</span>
+                    </span>
+                  </label>
+                  <label className={`flex items-center gap-2.5 rounded-lg border p-3 cursor-pointer transition-colors ${paymentMethod === 'cod' ? 'border-sasta-gold bg-sasta-yellow-cream' : 'border-sasta-border bg-white'}`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="cod"
+                      checked={paymentMethod === 'cod'}
+                      onChange={() => setPaymentMethod('cod')}
+                      className="accent-sasta-gold"
+                    />
+                    <span>
+                      <strong className="block text-sasta-heading">Cash on Delivery (COD)</strong>
+                      <span className="text-[11px] text-sasta-muted">Pay when your parcel arrives</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               {checkoutError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{checkoutError}</p>}
-              {!stripePromise && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">Secure card payments are not configured. Please contact store support.</p>}
+              {paymentMethod === 'stripe' && !stripePromise && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">Secure card payments are not configured. Choose Cash on Delivery or contact store support.</p>}
               <button
                 type="submit"
-                disabled={loading || !stripePromise}
-                className="w-full bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading font-bold text-xs uppercase tracking-wider py-3.5 rounded shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                disabled={loading || (paymentMethod === 'stripe' && !stripePromise)}
+                className="w-full bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading font-bold text-xs uppercase tracking-wider py-3.5 rounded shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 <Lock className="w-4 h-4" />
-                <span>{loading ? 'Preparing Secure Payment...' : 'Continue to Secure Payment'}</span>
+                <span>
+                  {loading
+                    ? (paymentMethod === 'cod' ? 'Confirming Order...' : 'Preparing Secure Payment...')
+                    : (paymentMethod === 'cod' ? `Confirm COD Order (£${grandTotal.toFixed(2)})` : 'Continue to Secure Payment')}
+                </span>
               </button>
             </form> : (
               stripePromise ? (

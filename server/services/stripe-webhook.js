@@ -1,8 +1,11 @@
 import { inTransaction } from '../db.js';
 import { restoreOrderReservation } from './orders.js';
+import { sendAdminNewOrderAlert, sendOrderConfirmationEmail } from './email.js';
 
 export async function processStripeEvent(event) {
-  return inTransaction(async (client) => {
+  let confirmedOrderForEmail = null;
+
+  const processed = await inTransaction(async (client) => {
     const recorded = await client.query(
       `INSERT INTO stripe_events (event_id, type) VALUES ($1, $2)
        ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
@@ -15,11 +18,14 @@ export async function processStripeEvent(event) {
       const order = await client.query(
         `UPDATE orders SET payment_status = 'Paid', order_status = 'Processing', paid_at = NOW()
          WHERE stripe_payment_intent_id = $1 AND payment_status = 'Pending'
-         RETURNING coupon_id`,
+         RETURNING coupon_id, order_ref, customer_name, customer_email, total, payment_method`,
         [object.id]
       );
       if (order.rows[0]?.coupon_id != null) {
         await client.query('UPDATE coupons SET redemption_count=redemption_count+1 WHERE id=$1', [order.rows[0].coupon_id]);
+      }
+      if (order.rows[0]) {
+        confirmedOrderForEmail = order.rows[0];
       }
     } else if (['payment_intent.payment_failed', 'payment_intent.canceled'].includes(event.type)) {
       const order = await client.query(
@@ -64,4 +70,20 @@ export async function processStripeEvent(event) {
     }
     return true;
   });
+
+  if (confirmedOrderForEmail) {
+    const payload = {
+      orderRef: confirmedOrderForEmail.order_ref,
+      customerName: confirmedOrderForEmail.customer_name,
+      customerEmail: confirmedOrderForEmail.customer_email,
+      total: confirmedOrderForEmail.total,
+      paymentMethod: confirmedOrderForEmail.payment_method || 'Stripe'
+    };
+    await Promise.allSettled([
+      sendOrderConfirmationEmail(payload),
+      sendAdminNewOrderAlert(payload)
+    ]);
+  }
+
+  return processed;
 }

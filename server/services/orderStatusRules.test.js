@@ -22,3 +22,8 @@ test('rejects shipping unpaid orders and reopening cancelled orders', () => {
     (error) => error.status === 409 && /cannot be reopened/.test(error.message)
   );
 });
+
+test('allows dispatching and delivering COD orders while payment is pending', () => {
+  assert.doesNotThrow(() => assertOrderStatusTransition('Processing', 'Dispatched', 'Pending', 'COD'));
+  assert.doesNotThrow(() => assertOrderStatusTransition('Dispatched', 'Delivered', 'Pending', 'COD'));
+});

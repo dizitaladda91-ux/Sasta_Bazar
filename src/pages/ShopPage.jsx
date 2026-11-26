@@ -33,11 +33,11 @@ export default function ShopPage() {
     'Casual Everyday Wear Suits',
     'Salwar Kameez / Suit Sets',
     'Dresses',
-    'Lehenga Choli',
+    'Lehenga ',
     'Sharara & Gharara Suits',
     'Kids Collection',
     'Unstitched Suits',
-    'Scarves'
+    'Hijab'
   ];
 
   const sizes = ['All', 'S', 'M', 'L', 'XL', 'XXL'];

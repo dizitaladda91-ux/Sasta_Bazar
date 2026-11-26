@@ -359,9 +359,9 @@ export default function BlogAdminClient() {
             ) : (
               <>
                 <div>
-                  <label className="block text-xs font-semibold text-sasta-heading mb-1">Admin Email</label>
+                  <label className="block text-xs font-semibold text-sasta-heading mb-1">Admin ID / Email</label>
                   <input
-                    type="email"
+                    type="text"
                     required
                     value={loginForm.email}
                     onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))}

@@ -830,6 +830,20 @@ app.post('/api/auth/register', registerLimiter, validate({ body: registerBody })
 
 app.post('/api/auth/login', loginLimiter, validate({ body: loginBody }), route(async (req, res) => {
   const { email, password } = req.validated.body;
+  const envAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const envAdminPassword = process.env.ADMIN_PASSWORD;
+
+  if (envAdminEmail && envAdminPassword && email === envAdminEmail && password === envAdminPassword) {
+    const passwordHash = await bcrypt.hash(envAdminPassword, 12);
+    await query(
+      `INSERT INTO users (name, email, password_hash, role)
+       VALUES ('Store Admin', $1, $2, 'admin')
+       ON CONFLICT (email) DO UPDATE SET
+         password_hash = EXCLUDED.password_hash, role = 'admin', updated_at = NOW()`,
+      [envAdminEmail, passwordHash]
+    );
+  }
+
   const { rows } = await userWithAddress(email);
   if (!(await verifyPassword(password, rows[0]?.password_hash))) {
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });

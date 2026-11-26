@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  CheckCircle2, Copy, Edit3, ExternalLink, LogOut, Plus, Search, Trash2, Upload, XCircle
+  CheckCircle2, Code2, Copy, Edit3, ExternalLink, Globe, LogOut, Package, Plus, RefreshCw, Search, Trash2, Upload, XCircle
 } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
-import { evaluateSeoScore, slugify } from '../../lib/blog-seo';
+import { evaluateSeoScore, getSiteUrl, slugify } from '../../lib/blog-seo';
 
 const EMPTY_FORM = {
   id: null,
@@ -27,6 +27,8 @@ const EMPTY_FORM = {
   canonicalUrl: '',
   ogImage: '',
   noindex: false,
+  schemaType: 'BlogPosting',
+  customSchema: '',
   tagsInput: '',
   faqs: [],
   productIds: []
@@ -63,12 +65,14 @@ export default function BlogAdminClient() {
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearch, setProductSearch] = useState('');
 
-  const [mode, setMode] = useState('list'); // 'list' | 'editor'
+  const [mode, setMode] = useState('list'); // 'list' | 'editor' | 'products'
   const [form, setForm] = useState(EMPTY_FORM);
   const [slugLocked, setSlugLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [savingProduct, setSavingProduct] = useState(false);
 
   const notify = (msg) => {
     setToast(msg);
@@ -209,6 +213,8 @@ export default function BlogAdminClient() {
         canonicalUrl: post.canonicalUrl,
         ogImage: post.ogImage,
         noindex: Boolean(post.noindex),
+        schemaType: post.schemaType || 'BlogPosting',
+        customSchema: post.customSchema || '',
         tagsInput: (post.tags || []).join(', '),
         faqs: post.faqs || [],
         productIds: post.productIds || []
@@ -241,6 +247,8 @@ export default function BlogAdminClient() {
         canonicalUrl: form.canonicalUrl,
         ogImage: form.ogImage,
         noindex: form.noindex,
+        schemaType: form.schemaType || 'BlogPosting',
+        customSchema: form.customSchema || '',
         tags: form.tagsInput.split(',').map((t) => t.trim()).filter(Boolean),
         faqs: form.faqs.filter((f) => f.question.trim() && f.answer.trim()),
         productIds: form.productIds
@@ -322,8 +330,73 @@ export default function BlogAdminClient() {
     const q = productSearch.trim().toLowerCase();
     return storeProducts
       .filter((p) => !q || p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q))
-      .slice(0, 20);
+      .slice(0, 30);
   }, [storeProducts, productSearch]);
+
+  const customSchemaStatus = useMemo(() => {
+    const raw = (form.customSchema || '').trim();
+    if (!raw) return { valid: true, message: 'Optional: auto-generates BlogPosting + FAQPage + Product + BreadcrumbList.' };
+    try {
+      JSON.parse(raw);
+      return { valid: true, message: 'Valid JSON-LD schema ready to inject.' };
+    } catch (err) {
+      return { valid: false, message: `Invalid JSON: ${err.message}` };
+    }
+  }, [form.customSchema]);
+
+  const openProductEditor = (product) => {
+    setEditingProduct({
+      id: product.id,
+      title: product.title || '',
+      price: String(product.price ?? ''),
+      compareAtPrice: product.compareAtPrice != null ? String(product.compareAtPrice) : '',
+      stock: String(product.stock ?? 0),
+      primaryImage: product.primaryImage || product.images?.[0] || '',
+      description: product.description || ''
+    });
+  };
+
+  const handleSaveProduct = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setSavingProduct(true);
+    try {
+      const payload = {
+        title: editingProduct.title.trim(),
+        price: Number(editingProduct.price),
+        compareAtPrice: editingProduct.compareAtPrice ? Number(editingProduct.compareAtPrice) : null,
+        stock: Number(editingProduct.stock),
+        images: editingProduct.primaryImage ? [editingProduct.primaryImage.trim()] : undefined,
+        description: editingProduct.description
+      };
+      await apiJson(`/api/admin/products/${encodeURIComponent(editingProduct.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      await loadDashboard();
+      setEditingProduct(null);
+      notify('Product updated successfully!');
+    } catch (err) {
+      notify(err.message);
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const handleRefreshSitemap = async () => {
+    try {
+      await fetch('/api/blog-revalidate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: form.slug || slugify(form.title) })
+      });
+      notify('Sitemap & blog cache refreshed!');
+    } catch {
+      notify('Could not refresh sitemap.');
+    }
+  };
 
   if (authState.loading) {
     return <div className="min-h-screen grid place-items-center bg-sasta-yellow-cream text-sm text-sasta-muted">Checking admin session…</div>;
@@ -417,10 +490,35 @@ export default function BlogAdminClient() {
             <h1 className="text-xl sm:text-2xl font-bold text-sasta-heading">SEO Blog Portal</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMode('list')}
+              className={`rounded-full px-3.5 py-2 text-xs font-semibold ${
+                mode === 'list' || mode === 'editor'
+                  ? 'bg-sasta-navy text-white'
+                  : 'border border-sasta-border text-sasta-heading hover:bg-sasta-yellow-light'
+              }`}
+            >
+              Blog Posts
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('products')}
+              className={`inline-flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-semibold ${
+                mode === 'products'
+                  ? 'bg-sasta-navy text-white'
+                  : 'border border-sasta-border text-sasta-heading hover:bg-sasta-yellow-light'
+              }`}
+            >
+              <Package className="h-3.5 w-3.5" /> Store Products
+            </button>
+            <Link href="/sitemap.xml" target="_blank" className="inline-flex items-center gap-1 rounded-full border border-sasta-border px-3.5 py-2 text-xs font-semibold text-sasta-heading hover:bg-sasta-yellow-light">
+              <Globe className="h-3.5 w-3.5" /> sitemap.xml
+            </Link>
             <Link href="/blog" target="_blank" className="inline-flex items-center gap-1 rounded-full border border-sasta-border px-3.5 py-2 text-xs font-semibold text-sasta-heading hover:bg-sasta-yellow-light">
               <ExternalLink className="h-3.5 w-3.5" /> View Blog
             </Link>
-            {mode === 'list' ? (
+            {mode !== 'editor' ? (
               <button
                 type="button"
                 onClick={openNewPost}
@@ -449,7 +547,59 @@ export default function BlogAdminClient() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-        {mode === 'list' ? (
+        {mode === 'products' ? (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between rounded-2xl border border-sasta-border bg-white p-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-sasta-muted" />
+                <input
+                  type="search"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Search store products by name or handle..."
+                  className="w-full rounded-lg border border-sasta-border pl-9 pr-3 py-2 text-sm focus:border-sasta-gold focus:outline-none"
+                />
+              </div>
+              <span className="text-xs text-sasta-muted">Showing {filteredProducts.length} of {storeProducts.length} products</span>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-sasta-border bg-white shadow-subtle divide-y divide-sasta-border">
+              {filteredProducts.map((product) => (
+                <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-sasta-yellow-cream/40">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={product.primaryImage || '/product-placeholder.svg'}
+                      alt={product.title}
+                      className="h-14 w-12 rounded-lg object-cover border border-sasta-border bg-sasta-yellow-cream shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-bold text-sasta-heading truncate">{product.title}</h2>
+                      <p className="text-xs text-sasta-muted">
+                        £{Number(product.price).toFixed(2)} • Stock: {product.stock ?? 0} • /product/{product.handle}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      href={`/product/${product.handle}`}
+                      target="_blank"
+                      className="rounded-lg border border-sasta-border px-3 py-1.5 text-xs font-semibold text-sasta-heading hover:bg-sasta-yellow-light"
+                    >
+                      View
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => openProductEditor(product)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-sasta-gold px-3.5 py-1.5 text-xs font-bold text-sasta-heading hover:bg-sasta-gold-hover"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" /> Edit Product
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : mode === 'list' ? (
           <div className="space-y-5">
             {/* Search & Status Filters */}
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between rounded-2xl border border-sasta-border bg-white p-4">
@@ -594,6 +744,46 @@ export default function BlogAdminClient() {
                   </div>
                 </div>
 
+                {/* Auto-generated Sitemap & Blog Link Preview */}
+                <div className="rounded-xl border border-sasta-border bg-sasta-yellow-cream/70 p-3.5 space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-sasta-heading flex items-center gap-1.5">
+                      <Globe className="h-3.5 w-3.5 text-sasta-gold-dark" />
+                      Auto Sitemap &amp; Live Blog Link
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${getSiteUrl()}/blog/${form.slug || slugify(form.title)}`;
+                          navigator.clipboard?.writeText(url);
+                          notify('Blog URL copied!');
+                        }}
+                        className="inline-flex items-center gap-1 rounded border border-sasta-border bg-white px-2.5 py-1 text-[11px] font-semibold hover:bg-sasta-yellow-light"
+                      >
+                        <Copy className="h-3 w-3" /> Copy Link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRefreshSitemap}
+                        className="inline-flex items-center gap-1 rounded border border-sasta-border bg-white px-2.5 py-1 text-[11px] font-semibold hover:bg-sasta-yellow-light"
+                      >
+                        <RefreshCw className="h-3 w-3" /> Update Sitemap
+                      </button>
+                    </div>
+                  </div>
+                  <p className="font-mono text-[11px] text-sasta-navy break-all">
+                    {getSiteUrl()}/blog/{form.slug || slugify(form.title) || 'your-post-slug'}
+                  </p>
+                  {!form.noindex ? (
+                    <pre className="overflow-x-auto rounded bg-white p-2 font-mono text-[10px] text-sasta-body border border-sasta-border/70">
+{`<url>\n  <loc>${getSiteUrl()}/blog/${form.slug || slugify(form.title) || 'your-post-slug'}</loc>\n  <changefreq>weekly</changefreq>\n  <priority>0.8</priority>\n</url>`}
+                    </pre>
+                  ) : (
+                    <p className="text-[11px] text-amber-700 font-semibold">noindex is enabled — excluded from sitemap.xml</p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-sasta-heading mb-1">
                     Excerpt
@@ -698,6 +888,68 @@ export default function BlogAdminClient() {
                     noindex (hide this post from Google &amp; sitemap)
                   </label>
                 </div>
+
+                {/* Schema / JSON-LD Builder */}
+                <div className="border-t border-sasta-border pt-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-sasta-heading flex items-center gap-1.5">
+                      <Code2 className="h-4 w-4 text-sasta-gold-dark" />
+                      Schema Markup (JSON-LD)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({
+                        ...p,
+                        customSchema: JSON.stringify({
+                          '@context': 'https://schema.org',
+                          '@type': 'HowTo',
+                          name: p.title || 'Ethnic Outfit Styling Guide',
+                          step: [
+                            { '@type': 'HowToStep', name: 'Choose Fabric', text: 'Pick breathable silk, georgette, or cotton.' },
+                            { '@type': 'HowToStep', name: 'Match Accessories', text: 'Pair with statement earrings and jersey hijab.' }
+                          ]
+                        }, null, 2)
+                      }))}
+                      className="rounded-full border border-sasta-border bg-sasta-yellow-cream px-3 py-1 text-[11px] font-semibold text-sasta-heading hover:bg-sasta-yellow-light"
+                    >
+                      + Insert Sample HowTo Schema
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Primary Article Schema Type</label>
+                      <select
+                        value={form.schemaType}
+                        onChange={(e) => setForm((p) => ({ ...p, schemaType: e.target.value }))}
+                        className="w-full rounded-lg border border-sasta-border bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="BlogPosting">BlogPosting (Recommended)</option>
+                        <option value="Article">Article</option>
+                        <option value="HowTo">HowTo</option>
+                        <option value="NewsArticle">NewsArticle</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end pb-2">
+                      <span className={`text-[11px] font-semibold ${customSchemaStatus.valid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {customSchemaStatus.message}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-sasta-heading mb-1">
+                      Custom JSON-LD Schema (optional — added alongside auto schemas)
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.customSchema}
+                      onChange={(e) => setForm((p) => ({ ...p, customSchema: e.target.value }))}
+                      placeholder='{"@context":"https://schema.org","@type":"HowTo",...}'
+                      className="w-full rounded-lg border border-sasta-border px-3 py-2 font-mono text-xs focus:border-sasta-gold focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* FAQ Builder */}
@@ -770,19 +1022,28 @@ export default function BlogAdminClient() {
                     const pid = Number(product.id);
                     const checked = form.productIds.includes(pid);
                     return (
-                      <label key={pid} className="flex items-center gap-3 p-2.5 text-xs cursor-pointer hover:bg-sasta-yellow-cream">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => setForm((p) => ({
-                            ...p,
-                            productIds: checked ? p.productIds.filter((x) => x !== pid) : [...p.productIds, pid]
-                          }))}
-                          className="h-4 w-4 accent-sasta-gold"
-                        />
-                        <span className="flex-1 font-medium text-sasta-heading truncate">{product.title}</span>
-                        <span className="font-bold text-sasta-gold-dark">£{Number(product.price).toFixed(2)}</span>
-                      </label>
+                      <div key={pid} className="flex items-center gap-3 p-2.5 text-xs hover:bg-sasta-yellow-cream">
+                        <label className="flex flex-1 items-center gap-3 cursor-pointer min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setForm((p) => ({
+                              ...p,
+                              productIds: checked ? p.productIds.filter((x) => x !== pid) : [...p.productIds, pid]
+                            }))}
+                            className="h-4 w-4 accent-sasta-gold"
+                          />
+                          <span className="flex-1 font-medium text-sasta-heading truncate">{product.title}</span>
+                          <span className="font-bold text-sasta-gold-dark">£{Number(product.price).toFixed(2)}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => openProductEditor(product)}
+                          className="shrink-0 rounded border border-sasta-border bg-white px-2.5 py-1 text-[11px] font-semibold text-sasta-heading hover:bg-sasta-yellow-light"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -951,6 +1212,120 @@ export default function BlogAdminClient() {
           </form>
         )}
       </div>
+
+      {/* Quick Product Edit Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+          <form onSubmit={handleSaveProduct} className="w-full max-w-lg rounded-2xl border border-sasta-border bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-sasta-border pb-3">
+              <h2 className="text-lg font-bold text-sasta-heading">Edit Store Product</h2>
+              <button type="button" onClick={() => setEditingProduct(null)} className="text-xs text-sasta-muted hover:text-sasta-heading">
+                Close
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-sasta-heading mb-1">Product Title *</label>
+              <input
+                type="text"
+                required
+                value={editingProduct.title}
+                onChange={(e) => setEditingProduct((p) => ({ ...p, title: e.target.value }))}
+                className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-sasta-heading mb-1">Price (£) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={editingProduct.price}
+                  onChange={(e) => setEditingProduct((p) => ({ ...p, price: e.target.value }))}
+                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-sasta-heading mb-1">Compare (£)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editingProduct.compareAtPrice}
+                  onChange={(e) => setEditingProduct((p) => ({ ...p, compareAtPrice: e.target.value }))}
+                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-sasta-heading mb-1">Stock</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editingProduct.stock}
+                  onChange={(e) => setEditingProduct((p) => ({ ...p, stock: e.target.value }))}
+                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-sasta-heading mb-1">Primary Image URL</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editingProduct.primaryImage}
+                  onChange={(e) => setEditingProduct((p) => ({ ...p, primaryImage: e.target.value }))}
+                  className="flex-1 rounded-lg border border-sasta-border px-3 py-2 text-xs"
+                />
+                <label className="cursor-pointer rounded-lg border border-sasta-border bg-sasta-yellow-cream px-3 py-2 text-xs font-semibold hover:bg-sasta-yellow-light">
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!file) return;
+                      try {
+                        const url = await uploadImageFile(file);
+                        setEditingProduct((p) => ({ ...p, primaryImage: url }));
+                        notify('Product image uploaded!');
+                      } catch (err) {
+                        notify(err.message);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-sasta-heading mb-1">Description</label>
+              <textarea
+                rows={3}
+                value={editingProduct.description}
+                onChange={(e) => setEditingProduct((p) => ({ ...p, description: e.target.value }))}
+                className="w-full rounded-lg border border-sasta-border px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditingProduct(null)} className="rounded-full border border-sasta-border px-4 py-2 text-xs font-semibold">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingProduct}
+                className="rounded-full bg-sasta-gold px-5 py-2 text-xs font-bold uppercase tracking-wider text-sasta-heading hover:bg-sasta-gold-hover disabled:opacity-60"
+              >
+                {savingProduct ? 'Saving…' : 'Save Product'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

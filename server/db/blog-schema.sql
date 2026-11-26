@@ -32,9 +32,14 @@ CREATE TABLE IF NOT EXISTS posts (
   reading_time INTEGER NOT NULL DEFAULT 1,
   word_count INTEGER NOT NULL DEFAULT 0,
   seo_score INTEGER NOT NULL DEFAULT 0,
+  schema_type TEXT NOT NULL DEFAULT 'BlogPosting',
+  custom_schema TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS schema_type TEXT NOT NULL DEFAULT 'BlogPosting';
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS custom_schema TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS posts_status_published_idx ON posts(status, published_at DESC);
 CREATE INDEX IF NOT EXISTS posts_category_idx ON posts(category_id);

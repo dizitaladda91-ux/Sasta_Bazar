@@ -38,6 +38,8 @@ const postPayloadSchema = z.object({
   canonicalUrl: z.string().trim().max(1000).default(''),
   ogImage: z.string().trim().max(1000).default(''),
   noindex: z.boolean().default(false),
+  schemaType: z.enum(['BlogPosting', 'Article', 'HowTo', 'NewsArticle']).default('BlogPosting'),
+  customSchema: z.string().max(15000).default(''),
   tags: z.array(z.string().trim().min(1).max(60)).default([]),
   faqs: z.array(faqSchema).default([]),
   productIds: z.array(z.coerce.number().int().positive()).default([])
@@ -82,7 +84,9 @@ function formatAdminPost(row) {
     noindex: Boolean(row.noindex),
     readingTime: Number(row.reading_time || 1),
     wordCount: Number(row.word_count || 0),
-    seoScore: Number(row.seo_score || 0)
+    seoScore: Number(row.seo_score || 0),
+    schemaType: row.schema_type || 'BlogPosting',
+    customSchema: row.custom_schema || ''
   };
 }
 
@@ -232,12 +236,14 @@ router.post('/posts', route(async (req, res) => {
          title, slug, excerpt, content_html, featured_image, featured_image_alt,
          featured_image_width, featured_image_height, category_id, author_name,
          status, published_at, focus_keyword, meta_title, meta_description,
-         canonical_url, og_image, noindex, reading_time, word_count, seo_score
+         canonical_url, og_image, noindex, reading_time, word_count, seo_score,
+         schema_type, custom_schema
        ) VALUES (
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10,
          $11, $12, $13, $14, $15,
-         $16, $17, $18, $19, $20, $21
+         $16, $17, $18, $19, $20, $21,
+         $22, $23
        ) RETURNING id`,
       [
         data.title,
@@ -260,7 +266,9 @@ router.post('/posts', route(async (req, res) => {
         data.noindex,
         seo.readingTime,
         seo.wordCount,
-        seo.score
+        seo.score,
+        data.schemaType,
+        data.customSchema
       ]
     );
     const postId = Number(rows[0].id);
@@ -316,8 +324,9 @@ router.put('/posts/:id', route(async (req, res) => {
          focus_keyword = $13, meta_title = $14, meta_description = $15,
          canonical_url = $16, og_image = $17, noindex = $18,
          reading_time = $19, word_count = $20, seo_score = $21,
+         schema_type = $22, custom_schema = $23,
          updated_at = NOW()
-       WHERE id = $22`,
+       WHERE id = $24`,
       [
         data.title,
         newSlug,
@@ -340,6 +349,8 @@ router.put('/posts/:id', route(async (req, res) => {
         seo.readingTime,
         seo.wordCount,
         seo.score,
+        data.schemaType,
+        data.customSchema,
         postId
       ]
     );

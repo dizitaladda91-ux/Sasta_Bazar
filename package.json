@@ -9,6 +9,7 @@
     "server": "node server/index.js",
     "db:init": "node scripts/init-db.js",
     "blog:seed": "node scripts/seed-blog.js",
+    "products:sync": "node scripts/sync-shopify-products.js",
     "admin:create": "node scripts/create-admin.js",
     "orders:release-stale": "node scripts/release-stale-orders.js",
     "test": "node --test",

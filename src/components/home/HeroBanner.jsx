@@ -49,7 +49,7 @@ export default function HeroBanner() {
           <div className="pointer-events-auto mt-6 flex flex-col justify-center gap-3 sm:mt-9 sm:flex-row sm:gap-5">
             <Link
               to="/shop"
-              className="inline-flex min-h-12 items-center justify-center bg-[#a4ed00] px-8 text-xs font-bold uppercase tracking-wider text-[#17200b] transition-colors hover:bg-[#b5ff16] sm:min-h-14 sm:px-9 sm:text-sm"
+              className="inline-flex min-h-12 items-center justify-center border border-[#EDE3B8] bg-[#FFF8DC] px-8 text-xs font-bold uppercase tracking-wider text-[#1F1F1F] transition-colors hover:bg-[#FFF3C4] sm:min-h-14 sm:px-9 sm:text-sm"
             >
               {copy?.hero?.primaryCta}
             </Link>

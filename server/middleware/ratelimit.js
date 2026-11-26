@@ -1,4 +1,12 @@
-import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit';
+
+function normalizeIp(ip) {
+  const raw = String(ip || 'unknown').trim().replace(/^::ffff:/i, '');
+  if (raw.includes(':')) {
+    return raw.split(':').slice(0, 4).join(':');
+  }
+  return raw;
+}
 
 const makeLimiter = ({ windowMs, limit, message, keyGenerator }) => rateLimit({
   windowMs,
@@ -13,7 +21,7 @@ const minute = 60 * 1000;
 const hour = 60 * minute;
 
 const ipAndEmailKey = (req) => (
-  `${ipKeyGenerator(req.ip)}|${String(req.body?.email || '').trim().toLowerCase()}`
+  `${normalizeIp(req.ip)}|${String(req.body?.email || '').trim().toLowerCase()}`
 );
 
 export const generalLimiter = makeLimiter({

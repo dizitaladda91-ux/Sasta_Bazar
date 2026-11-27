@@ -64,11 +64,65 @@ export const NAV_CATEGORIES = [
   { name: 'Scarves', path: '/collection/scarves' }
 ];
 
+export const WOMENS_MENU_GROUPS = [
+  'SHOP BY STYLE',
+  'OCCASION WEAR',
+  'ACCESSORIES'
+];
+
+export const KIDS_MENU_GROUPS = [
+  'KIDS ETHNIC WEAR',
+  'KIDS OCCASIONS'
+];
+
 export const MEGA_MENU_GROUPS = [
   'SHOP BY STYLE',
   'OCCASION WEAR',
   'FOR KIDS',
   'ACCESSORIES'
+];
+
+export const KIDS_MENU_CATEGORIES = [
+  {
+    name: 'All Kids Collection',
+    slug: 'kids-all',
+    path: '/collection/kids-collection',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/81c960b0-5c23-4f4c-bd88-2b25f5b5a124.jpg?v=1782834977',
+    badge: 'Popular',
+    group: 'KIDS ETHNIC WEAR',
+    featuredTitle: 'Kids Festive Edit — Up to 50% Off',
+    featuredSubtitle: 'Soft cotton-lined lehengas, shararas, and festive kurta sets for kids.'
+  },
+  {
+    name: 'Kids Lehenga Choli',
+    slug: 'kids-lehenga',
+    path: '/collection/kids-collection',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/81c960b0-5c23-4f4c-bd88-2b25f5b5a124.jpg?v=1782834977',
+    badge: 'Trending',
+    group: 'KIDS ETHNIC WEAR',
+    featuredTitle: 'Kids Embroidered Lehengas',
+    featuredSubtitle: 'Lightweight net & silk lehengas designed for comfortable twirls.'
+  },
+  {
+    name: 'Kids Sharara & Suit Sets',
+    slug: 'kids-sharara',
+    path: '/collection/kids-collection',
+    image: '/hero-collection-3.png',
+    badge: 'New',
+    group: 'KIDS OCCASIONS',
+    featuredTitle: 'Kids Eid & Wedding Suits',
+    featuredSubtitle: 'Breathable festive shararas and kurta sets for family celebrations.'
+  },
+  {
+    name: 'Shop All Kids Wear',
+    slug: 'kids-shop',
+    path: '/shop?category=Kids+Collection',
+    image: '/hero-collection-3.png',
+    badge: null,
+    group: 'KIDS OCCASIONS',
+    featuredTitle: 'Budget Kids Festive Wear',
+    featuredSubtitle: 'Filter all kids ethnic outfits by size, colour, and price.'
+  }
 ];
 
 export const MEGA_MENU_CATEGORIES = [

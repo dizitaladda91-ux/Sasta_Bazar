@@ -11,7 +11,7 @@ import MegaMenu from './MegaMenu';
 export default function Header() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
+  const [activeMegaMenu, setActiveMegaMenu] = useState(null); // 'womens' | 'kids' | null
   const [isScrolled, setIsScrolled] = useState(false);
   const collectionMenuRef = useRef(null);
   const closeTimerRef = useRef(null);
@@ -27,15 +27,15 @@ export default function Header() {
     }
   };
 
-  const openCollections = () => {
+  const openMenu = (menuName) => {
     cancelCloseTimer();
-    setIsCollectionsOpen(true);
+    setActiveMegaMenu(menuName);
   };
 
-  const scheduleCloseCollections = () => {
+  const scheduleCloseMenu = () => {
     cancelCloseTimer();
     closeTimerRef.current = window.setTimeout(() => {
-      setIsCollectionsOpen(false);
+      setActiveMegaMenu(null);
     }, 180);
   };
 
@@ -51,16 +51,16 @@ export default function Header() {
   useEffect(() => {
     setIsMobileNavOpen(false);
     setIsSearchOpen(false);
-    setIsCollectionsOpen(false);
+    setActiveMegaMenu(null);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!isCollectionsOpen) return undefined;
+    if (!activeMegaMenu) return undefined;
     const closeOnOutsideClick = (event) => {
-      if (!collectionMenuRef.current?.contains(event.target)) setIsCollectionsOpen(false);
+      if (!collectionMenuRef.current?.contains(event.target)) setActiveMegaMenu(null);
     };
     const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setIsCollectionsOpen(false);
+      if (event.key === 'Escape') setActiveMegaMenu(null);
     };
     document.addEventListener('pointerdown', closeOnOutsideClick);
     document.addEventListener('keydown', closeOnEscape);
@@ -68,7 +68,7 @@ export default function Header() {
       document.removeEventListener('pointerdown', closeOnOutsideClick);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [isCollectionsOpen]);
+  }, [activeMegaMenu]);
 
   return (
     <>
@@ -107,23 +107,44 @@ export default function Header() {
             <ul className="flex items-center justify-center gap-5 xl:gap-8">
               <li
                 className="relative"
-                onMouseEnter={openCollections}
-                onMouseLeave={scheduleCloseCollections}
+                onMouseEnter={() => openMenu('womens')}
+                onMouseLeave={scheduleCloseMenu}
               >
                 <button
                   type="button"
-                  aria-expanded={isCollectionsOpen}
-                  aria-controls="collection-menu"
+                  aria-expanded={activeMegaMenu === 'womens'}
+                  aria-controls="womens-collection-menu"
                   aria-haspopup="true"
-                  onClick={() => setIsCollectionsOpen((open) => !open)}
+                  onClick={() => setActiveMegaMenu((curr) => (curr === 'womens' ? null : 'womens'))}
                   className={`flex items-center gap-1.5 whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#B8862B] ${
-                    isCollectionsOpen || location.pathname.startsWith('/collection') || location.pathname === '/shop'
+                    activeMegaMenu === 'womens' || (location.pathname.startsWith('/collection') && !location.pathname.includes('kids')) || location.pathname === '/shop'
                       ? 'text-[#B8862B]'
                       : 'text-[#34312e]'
                   }`}
                 >
-                  Our Collection
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isCollectionsOpen ? 'rotate-180' : ''}`} />
+                  Women&apos;s Collection
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${activeMegaMenu === 'womens' ? 'rotate-180' : ''}`} />
+                </button>
+              </li>
+              <li
+                className="relative"
+                onMouseEnter={() => openMenu('kids')}
+                onMouseLeave={scheduleCloseMenu}
+              >
+                <button
+                  type="button"
+                  aria-expanded={activeMegaMenu === 'kids'}
+                  aria-controls="kids-collection-menu"
+                  aria-haspopup="true"
+                  onClick={() => setActiveMegaMenu((curr) => (curr === 'kids' ? null : 'kids'))}
+                  className={`flex items-center gap-1.5 whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#B8862B] ${
+                    activeMegaMenu === 'kids' || location.pathname.includes('kids-collection')
+                      ? 'text-[#B8862B]'
+                      : 'text-[#34312e]'
+                  }`}
+                >
+                  Kids Collection
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${activeMegaMenu === 'kids' ? 'rotate-180' : ''}`} />
                 </button>
               </li>
               <li>
@@ -201,11 +222,11 @@ export default function Header() {
           </div>
         </div>
         <MegaMenu
-          isOpen={isCollectionsOpen}
+          activeMenu={activeMegaMenu}
           pathname={location.pathname}
-          onClose={() => setIsCollectionsOpen(false)}
-          onMouseEnter={openCollections}
-          onMouseLeave={scheduleCloseCollections}
+          onClose={() => setActiveMegaMenu(null)}
+          onMouseEnter={() => { if (activeMegaMenu) openMenu(activeMegaMenu); }}
+          onMouseLeave={scheduleCloseMenu}
         />
       </header>
 

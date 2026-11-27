@@ -1,29 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles } from 'lucide-react';
-import { MEGA_MENU_CATEGORIES, MEGA_MENU_GROUPS } from '../../data/categories';
+import {
+  KIDS_MENU_CATEGORIES,
+  KIDS_MENU_GROUPS,
+  MEGA_MENU_CATEGORIES,
+  WOMENS_MENU_GROUPS
+} from '../../data/categories';
 
 const FALLBACK_IMAGE = '/hero-collection-1.png';
 
 export default function MegaMenu({
-  isOpen,
+  activeMenu, // 'womens' | 'kids' | null
   pathname,
   onClose,
   onMouseEnter,
   onMouseLeave
 }) {
-  const [activeCategory, setActiveCategory] = useState(MEGA_MENU_CATEGORIES[0]);
+  const isKids = activeMenu === 'kids';
+  const groups = isKids ? KIDS_MENU_GROUPS : WOMENS_MENU_GROUPS;
+  const categories = isKids
+    ? KIDS_MENU_CATEGORIES
+    : MEGA_MENU_CATEGORIES.filter((item) => item.group !== 'FOR KIDS');
+
+  const [activeCategory, setActiveCategory] = useState(categories[0]);
 
   useEffect(() => {
-    if (isOpen) {
-      const matched = MEGA_MENU_CATEGORIES.find(
+    if (activeMenu) {
+      const matched = categories.find(
         (item) => pathname === item.path || (item.path !== '/shop' && pathname.startsWith(item.path))
       );
-      setActiveCategory(matched || MEGA_MENU_CATEGORIES[0]);
+      setActiveCategory(matched || categories[0]);
     }
-  }, [isOpen, pathname]);
+  }, [activeMenu, pathname]);
 
-  if (!isOpen) return null;
+  if (!activeMenu) return null;
 
   let itemCounter = 0;
 
@@ -38,18 +49,21 @@ export default function MegaMenu({
 
       {/* Two-part Glassmorphic Luxury Mega Menu */}
       <div
-        id="collection-menu"
+        id={isKids ? 'kids-collection-menu' : 'womens-collection-menu'}
         role="region"
-        aria-label="Our Collection Mega Menu"
+        aria-label={isKids ? "Kids Collection Mega Menu" : "Women's Collection Mega Menu"}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         className="animate-mega-menu fixed left-1/2 top-[76px] sm:top-[84px] z-40 w-[min(94vw,1060px)] max-h-[calc(100vh-100px)] overflow-y-auto rounded-2xl border border-[#B8862B]/30 bg-[rgba(255,252,245,0.95)] p-6 shadow-[0_24px_60px_rgba(48,39,25,0.18)] backdrop-blur-md"
       >
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Left: Grouped Category Links */}
-          <nav aria-label="Product categories" className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-            {MEGA_MENU_GROUPS.map((groupName) => {
-              const items = MEGA_MENU_CATEGORIES.filter((cat) => cat.group === groupName);
+          <nav
+            aria-label={isKids ? 'Kids categories' : "Women's categories"}
+            className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5"
+          >
+            {groups.map((groupName) => {
+              const items = categories.filter((cat) => cat.group === groupName);
               if (!items.length) return null;
 
               return (

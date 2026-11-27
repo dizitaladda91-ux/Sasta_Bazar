@@ -4,11 +4,17 @@ import { X, ChevronDown, ChevronRight, Heart, ShoppingBag, ShieldCheck, User } f
 import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { MEGA_MENU_CATEGORIES, MEGA_MENU_GROUPS } from '../../data/categories';
+import {
+  KIDS_MENU_CATEGORIES,
+  KIDS_MENU_GROUPS,
+  MEGA_MENU_CATEGORIES,
+  WOMENS_MENU_GROUPS
+} from '../../data/categories';
 
 export default function MobileNav({ isOpen, onClose }) {
   const [openSections, setOpenSections] = useState({
-    collection: false,
+    womens: false,
+    kids: false,
     help: false
   });
 
@@ -99,24 +105,75 @@ export default function MobileNav({ isOpen, onClose }) {
             </Link>
           </div>
 
-          {/* Categories Accordion */}
+          {/* Women's Collection Accordion */}
           <div className="px-4 py-2">
             <button
-              onClick={() => toggleSection('collection')}
+              onClick={() => toggleSection('womens')}
               className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-sasta-heading py-2"
             >
-              <span>Our Collection</span>
-              {openSections.collection ? (
+              <span>Women&apos;s Collection</span>
+              {openSections.womens ? (
                 <ChevronDown className="w-4 h-4 text-sasta-muted" />
               ) : (
                 <ChevronRight className="w-4 h-4 text-sasta-muted" />
               )}
             </button>
 
-            {openSections.collection && (
+            {openSections.womens && (
               <div className="mt-1 space-y-3 pb-3 pt-1 animate-fade-in">
-                {MEGA_MENU_GROUPS.map((groupName) => {
+                {WOMENS_MENU_GROUPS.map((groupName) => {
                   const items = MEGA_MENU_CATEGORIES.filter((c) => c.group === groupName);
+                  return (
+                    <div key={groupName} className="space-y-1">
+                      <p className="px-1 font-serif text-[10px] font-bold uppercase tracking-[0.18em] text-[#B8862B]">
+                        {groupName}
+                      </p>
+                      {items.map((category) => (
+                        <Link
+                          key={category.slug}
+                          to={category.path}
+                          onClick={handleLinkClick}
+                          className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-xs text-sasta-heading hover:bg-[#F6ECD9]/70 transition-colors"
+                        >
+                          <img
+                            src={category.image}
+                            alt=""
+                            loading="lazy"
+                            className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[#B8862B]/25"
+                          />
+                          <span className="flex-1 truncate font-medium">{category.name}</span>
+                          {category.badge && (
+                            <span className="rounded-full bg-[#F6ECD9] px-2 py-0.5 text-[9px] font-bold uppercase text-[#B8862B]">
+                              {category.badge}
+                            </span>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Kids Collection Accordion */}
+          <div className="px-4 py-2">
+            <button
+              onClick={() => toggleSection('kids')}
+              className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-sasta-heading py-2"
+            >
+              <span>Kids Collection</span>
+              {openSections.kids ? (
+                <ChevronDown className="w-4 h-4 text-sasta-muted" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-sasta-muted" />
+              )}
+            </button>
+
+            {openSections.kids && (
+              <div className="mt-1 space-y-3 pb-3 pt-1 animate-fade-in">
+                {KIDS_MENU_GROUPS.map((groupName) => {
+                  const items = KIDS_MENU_CATEGORIES.filter((c) => c.group === groupName);
                   return (
                     <div key={groupName} className="space-y-1">
                       <p className="px-1 font-serif text-[10px] font-bold uppercase tracking-[0.18em] text-[#B8862B]">

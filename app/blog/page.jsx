@@ -37,17 +37,44 @@ export default async function BlogIndexPage({ searchParams }) {
     getAllBlogTags()
   ]);
 
+  const siteUrl = getSiteUrl();
+  const blogSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Blog',
+    name: 'SASTA BAZAAR - Everyday Luxury Style Journal',
+    url: `${siteUrl}/blog`,
+    description: 'Ethnic fashion guides, wedding lehenga trends, Eid sharara styling, and kids festive outfits.',
+    publisher: {
+      '@type': 'Organization',
+      name: 'SASTA BAZAAR',
+      logo: { '@type': 'ImageObject', url: `${siteUrl}/logo.png` }
+    },
+    blogPost: posts.map((post) => ({
+      '@type': 'BlogPosting',
+      headline: post.title,
+      url: `${siteUrl}/blog/${post.slug}`,
+      datePublished: post.publishedAt || post.createdAt,
+      author: { '@type': 'Person', name: post.authorName }
+    }))
+  };
+
   return (
-    <BlogListingView
-      title="Everyday Luxury Style Journal"
-      description="Honest styling guides, festive outfit ideas, and fabric care tips in Hinglish & English for ladies and kids ethnic wear."
-      posts={posts}
-      categories={categories}
-      tags={tags}
-      page={page}
-      totalPages={totalPages}
-      basePath="/blog"
-      searchQuery={searchQuery}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(blogSchema) }}
+      />
+      <BlogListingView
+        title="Everyday Luxury Style Journal"
+        description="Honest styling guides, festive outfit ideas, and fabric care tips in Hinglish & English for ladies and kids ethnic wear."
+        posts={posts}
+        categories={categories}
+        tags={tags}
+        page={page}
+        totalPages={totalPages}
+        basePath="/blog"
+        searchQuery={searchQuery}
+      />
+    </>
   );
 }

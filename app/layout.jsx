@@ -1,12 +1,5 @@
-import { Montserrat } from 'next/font/google';
 import '../src/index.css';
 import { getSiteUrl } from '../lib/blog-seo';
-
-const montserrat = Montserrat({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  display: 'swap'
-});
 
 export const metadata = {
   metadataBase: new URL(getSiteUrl()),
@@ -28,7 +21,15 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={montserrat.className}>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className="bg-white text-sasta-body font-sans antialiased selection:bg-sasta-gold selection:text-sasta-heading">
         {children}
       </body>

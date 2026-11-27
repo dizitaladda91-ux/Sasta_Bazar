@@ -1,23 +1,40 @@
 import React, { useCallback, useMemo } from 'react';
 import NextLink from 'next/link';
-import { useRouter as useNextRouter } from 'next/router';
+import { useRouter as usePagesRouter } from 'next/compat/router';
+import {
+  usePathname as useAppPathname,
+  useRouter as useAppRouter,
+  useSearchParams as useAppSearchParams
+} from 'next/navigation';
 
 export const Link = React.forwardRef(function Link({ to, href, ...props }, ref) {
   return <NextLink ref={ref} href={href || to || '/'} {...props} />;
 });
 
 export function useNavigate() {
-  const router = useNextRouter();
+  const pagesRouter = usePagesRouter();
+  const appRouter = useAppRouter();
   return useCallback((destination, options = {}) => {
-    if (typeof destination === 'number') return router.back();
-    return router.push(destination, undefined, { scroll: options.preventScrollReset !== true });
-  }, [router]);
+    if (pagesRouter) {
+      if (typeof destination === 'number') return pagesRouter.back();
+      return pagesRouter.push(destination, undefined, { scroll: options.preventScrollReset !== true });
+    }
+    if (typeof destination === 'number') return appRouter.back();
+    return appRouter.push(destination, { scroll: options.preventScrollReset !== true });
+  }, [pagesRouter, appRouter]);
 }
 
 export function useLocation() {
-  const router = useNextRouter();
-  const [pathname, search = ''] = router.asPath.split('?');
-  return { pathname, search: search ? `?${search}` : '' };
+  const pagesRouter = usePagesRouter();
+  const appPathname = useAppPathname();
+  const appSearch = useAppSearchParams();
+
+  if (pagesRouter?.asPath != null) {
+    const [pathname, search = ''] = pagesRouter.asPath.split('?');
+    return { pathname, search: search ? `?${search}` : '' };
+  }
+  const qs = appSearch?.toString() || '';
+  return { pathname: appPathname || '/', search: qs ? `?${qs}` : '' };
 }
 
 export function useParams() {
@@ -35,13 +52,25 @@ export function useParams() {
 }
 
 export function useSearchParams() {
-  const router = useNextRouter();
-  const search = router.asPath.split('?')[1]?.split('#')[0] || '';
+  const pagesRouter = usePagesRouter();
+  const appPathname = useAppPathname();
+  const appRouter = useAppRouter();
+  const appSearch = useAppSearchParams();
+
+  const search = pagesRouter?.asPath != null
+    ? (pagesRouter.asPath.split('?')[1]?.split('#')[0] || '')
+    : (appSearch?.toString() || '');
+
   const params = useMemo(() => new URLSearchParams(search), [search]);
+
   const setSearchParams = useCallback((nextParams) => {
     const query = new URLSearchParams(nextParams).toString();
-    const pathname = router.asPath.split(/[?#]/)[0];
-    return router.push(`${pathname}${query ? `?${query}` : ''}`, undefined, { scroll: false });
-  }, [router]);
+    if (pagesRouter?.asPath != null) {
+      const pathname = pagesRouter.asPath.split(/[?#]/)[0];
+      return pagesRouter.push(`${pathname}${query ? `?${query}` : ''}`, undefined, { scroll: false });
+    }
+    return appRouter.push(`${appPathname || '/'}${query ? `?${query}` : ''}`, { scroll: false });
+  }, [pagesRouter, appRouter, appPathname]);
+
   return [params, setSearchParams];
 }

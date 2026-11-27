@@ -135,18 +135,7 @@ export default function MobileNav({ isOpen, onClose }) {
                           onClick={handleLinkClick}
                           className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-xs text-sasta-heading hover:bg-[#F6ECD9]/70 transition-colors"
                         >
-                          <img
-                            src={category.image}
-                            alt=""
-                            loading="lazy"
-                            className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[#B8862B]/25"
-                          />
                           <span className="flex-1 truncate font-medium">{category.name}</span>
-                          {category.badge && (
-                            <span className="rounded-full bg-[#F6ECD9] px-2 py-0.5 text-[9px] font-bold uppercase text-[#B8862B]">
-                              {category.badge}
-                            </span>
-                          )}
                         </Link>
                       ))}
                     </div>
@@ -186,18 +175,7 @@ export default function MobileNav({ isOpen, onClose }) {
                           onClick={handleLinkClick}
                           className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-xs text-sasta-heading hover:bg-[#F6ECD9]/70 transition-colors"
                         >
-                          <img
-                            src={category.image}
-                            alt=""
-                            loading="lazy"
-                            className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[#B8862B]/25"
-                          />
                           <span className="flex-1 truncate font-medium">{category.name}</span>
-                          {category.badge && (
-                            <span className="rounded-full bg-[#F6ECD9] px-2 py-0.5 text-[9px] font-bold uppercase text-[#B8862B]">
-                              {category.badge}
-                            </span>
-                          )}
                         </Link>
                       ))}
                     </div>

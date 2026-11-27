@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import SEO from '../components/common/SEO';
+import PhoneInput from '../components/common/PhoneInput';
 
 export default function AuthPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1098,27 +1099,22 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              {/* UK Phone Number (Optional) */}
+              {/* Phone Number (Any Country) */}
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
                   <label className="block text-xs font-bold uppercase tracking-wider text-sasta-heading">
-                    UK Phone Number
+                    Phone Number
                   </label>
                   <span className="text-[10px] text-sasta-muted">For courier delivery updates</span>
                 </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-sasta-muted">
-                    <Phone className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    placeholder="+44 7700 900000"
-                    className="w-full pl-10 pr-3.5 py-2.5 border border-sasta-border rounded-lg text-sm bg-white focus:outline-none focus:border-sasta-gold transition-colors text-sasta-heading"
-                  />
-                </div>
+                <PhoneInput
+                  value={formData.phone}
+                  onChange={(phone) => {
+                    setFormData((prev) => ({ ...prev, phone }));
+                    setError('');
+                  }}
+                  placeholder="Enter mobile number"
+                />
               </div>
 
               {/* Password */}

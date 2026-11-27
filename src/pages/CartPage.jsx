@@ -17,6 +17,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import PhoneInput from '../components/common/PhoneInput';
 
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
@@ -368,12 +369,12 @@ export default function CartPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold mb-1">Mobile / Telephone</label>
-                  <input
-                    type="tel"
+                  <PhoneInput
                     value={customer.phone}
-                    onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                    placeholder="+44 7700 900123"
-                    className="w-full bg-sasta-yellow-cream/30 border border-sasta-border rounded p-2.5 outline-none focus:border-sasta-gold"
+                    onChange={(phone) => setCustomer({ ...customer, phone })}
+                    placeholder="Enter phone number"
+                    inputClassName="py-2 text-xs bg-sasta-yellow-cream/30"
+                    selectClassName="py-2 text-xs bg-sasta-yellow-cream/60"
                   />
                 </div>
                 <div>

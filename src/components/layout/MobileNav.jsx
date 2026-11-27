@@ -4,9 +4,7 @@ import { X, ChevronDown, ChevronRight, Heart, ShoppingBag, ShieldCheck, User } f
 import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { NAV_CATEGORIES } from '../../data/categories';
-import { useProducts } from '../../hooks/useProducts';
-import { getCategoryProducts } from '../../utils/categoryProducts';
+import { MEGA_MENU_CATEGORIES, MEGA_MENU_GROUPS } from '../../data/categories';
 
 export default function MobileNav({ isOpen, onClose }) {
   const [openSections, setOpenSections] = useState({
@@ -17,11 +15,6 @@ export default function MobileNav({ isOpen, onClose }) {
   const { wishlistCount } = useWishlist();
   const { totalCount, openCart } = useCart();
   const { user, isAuthenticated } = useAuth();
-  const { products, loading: productsLoading, error: productsError } = useProducts({
-    page: 1,
-    limit: 100,
-    enabled: isOpen && openSections.collection
-  });
 
   if (!isOpen) return null;
 
@@ -121,45 +114,38 @@ export default function MobileNav({ isOpen, onClose }) {
             </button>
 
             {openSections.collection && (
-              <div className="ml-1 mt-1 space-y-1 border-l border-sasta-gold/40 pb-2 pl-3 text-xs animate-fade-in">
-                {NAV_CATEGORIES.map((category) => {
-                  const featuredProducts = getCategoryProducts(products, category);
-
+              <div className="mt-1 space-y-3 pb-3 pt-1 animate-fade-in">
+                {MEGA_MENU_GROUPS.map((groupName) => {
+                  const items = MEGA_MENU_CATEGORIES.filter((c) => c.group === groupName);
                   return (
-                    <div key={category.path} className="py-1">
-                      <Link
-                        to={category.path}
-                        onClick={handleLinkClick}
-                        className="block py-1 text-sasta-body hover:text-sasta-heading"
-                      >
-                        {category.name === 'All' ? 'Shop All' : category.name}
-                      </Link>
-                      {featuredProducts.map((product) => (
+                    <div key={groupName} className="space-y-1">
+                      <p className="px-1 font-serif text-[10px] font-bold uppercase tracking-[0.18em] text-[#B8862B]">
+                        {groupName}
+                      </p>
+                      {items.map((category) => (
                         <Link
-                          key={product.id}
-                          to={`/product/${product.handle}`}
+                          key={category.slug}
+                          to={category.path}
                           onClick={handleLinkClick}
-                          className="ml-2 flex items-center gap-2 rounded-md py-1.5 pr-1 text-sasta-body hover:bg-sasta-yellow-cream"
+                          className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-xs text-sasta-heading hover:bg-[#F6ECD9]/70 transition-colors"
                         >
                           <img
-                            src={product.primaryImage}
+                            src={category.image}
                             alt=""
                             loading="lazy"
-                            className="h-10 w-8 shrink-0 rounded object-cover bg-sasta-yellow-cream"
+                            className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[#B8862B]/25"
                           />
-                          <span className="min-w-0">
-                            <span className="block line-clamp-2 text-[11px] leading-snug">{product.title}</span>
-                            <span className="block text-[10px] font-semibold text-sasta-heading">
-                              £{Number(product.price).toFixed(2)}
+                          <span className="flex-1 truncate font-medium">{category.name}</span>
+                          {category.badge && (
+                            <span className="rounded-full bg-[#F6ECD9] px-2 py-0.5 text-[9px] font-bold uppercase text-[#B8862B]">
+                              {category.badge}
                             </span>
-                          </span>
+                          )}
                         </Link>
                       ))}
                     </div>
                   );
                 })}
-                {productsLoading && <p className="py-2 text-[11px] text-sasta-muted">Loading products…</p>}
-                {productsError && <p className="py-2 text-[11px] text-rose-700">Products could not be loaded.</p>}
               </div>
             )}
           </div>

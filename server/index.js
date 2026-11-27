@@ -1178,6 +1178,7 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
       stock: fields.stock ?? existing.stock,
       category: fields.category ?? existing.category,
       subcategory: fields.subcategory ?? existing.subcategory,
+      collectionSlug: fields.collectionSlug ?? existing.collectionSlug,
       images: fields.images ?? existing.images,
       sizes: fields.sizes ?? existing.sizes,
       colors: fields.colors ?? existing.colors,
@@ -1204,12 +1205,12 @@ app.put('/api/admin/products/:id', validate({ params: productIdParams, body: pro
     await client.query(
       `UPDATE products SET title=$2,raw_title=$3,description=$4,price=$5,stock=$6,compare_at_price=$7,
         discount_percent=$8,images=$9,sizes=$10,colors=$11,primary_image=$12,hover_image=$13,is_best_seller=$14,
-        is_new_arrival=$15,category_id=$16,subcategory=$17,is_active=$18,updated_at=NOW()
+        is_new_arrival=$15,category_id=$16,subcategory=$17,collection_slug=$18,is_active=$19,updated_at=NOW()
        WHERE id=$1`,
       [productId, updated.title, updated.title, updated.description || '',
         price, Number(updated.stock) || 0, compareAtPrice, discount, updated.images || [], updated.sizes || [], updated.colors || [],
         updated.images?.[0] || '', updated.images?.[1] || updated.images?.[0] || '', Boolean(updated.isBestSeller),
-        Boolean(updated.isNewArrival), categoryId, updated.subcategory || '', Boolean(updated.isActive)]
+        Boolean(updated.isNewArrival), categoryId, updated.subcategory || '', updated.collectionSlug || '', Boolean(updated.isActive)]
     );
     if (!Array.isArray(fields.variants)) {
       await client.query('UPDATE variants SET price=$2,compare_at_price=$3 WHERE product_id=$1', [productId, price, compareAtPrice]);

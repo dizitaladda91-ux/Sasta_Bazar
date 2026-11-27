@@ -41,6 +41,7 @@ const productFields = {
   stock: z.coerce.number().int().min(0).optional(),
   category: z.string().trim().min(1).max(120).optional(),
   subcategory: z.string().trim().min(1).max(120).optional(),
+  collectionSlug: optionalText(120),
   images: z.array(boundedText(2000)).max(20).optional(),
   sizes: z.array(boundedText(40)).max(100).optional(),
   colors: z.array(boundedText(60)).max(100).optional(),

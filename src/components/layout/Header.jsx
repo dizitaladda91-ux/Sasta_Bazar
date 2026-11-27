@@ -6,43 +6,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import MobileNav from './MobileNav';
 import SearchModal from './SearchModal';
-import { NAV_CATEGORIES } from '../../data/categories';
-
-function CollectionMenu({ pathname, onClose }) {
-  return (
-    <div
-      id="collection-menu"
-      className="absolute left-1/2 top-full z-50 w-[min(92vw,720px)] -translate-x-1/2 rounded-b-2xl border border-sasta-border bg-[#fcfaf7] p-4 shadow-xl shadow-black/15 sm:p-5"
-    >
-      <nav aria-label="Product categories">
-        <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-          {NAV_CATEGORIES.map((category) => {
-            const isActive = pathname === category.path
-              || (category.path !== '/shop' && pathname.startsWith(category.path));
-
-            return (
-              <li key={category.path}>
-                <Link
-                  to={category.path}
-                  onClick={onClose}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs font-semibold tracking-wide transition-colors ${
-                    isActive
-                      ? 'border-sasta-gold bg-sasta-yellow-light text-[#8d6b36]'
-                      : 'border-sasta-border/60 bg-white/80 text-[#34312e] hover:border-sasta-gold hover:bg-sasta-yellow-cream hover:text-[#8d6b36]'
-                  }`}
-                >
-                  <span>{category.name === 'All' ? 'Shop All' : category.name}</span>
-                  <span aria-hidden="true" className="text-[11px] opacity-60">&rarr;</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </div>
-  );
-}
+import MegaMenu from './MegaMenu';
 
 export default function Header() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -50,10 +14,32 @@ export default function Header() {
   const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const collectionMenuRef = useRef(null);
+  const closeTimerRef = useRef(null);
   const { totalCount, openCart } = useCart();
   const { wishlistCount } = useWishlist();
   const { user, isAuthenticated } = useAuth();
   const location = useLocation();
+
+  const cancelCloseTimer = () => {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const openCollections = () => {
+    cancelCloseTimer();
+    setIsCollectionsOpen(true);
+  };
+
+  const scheduleCloseCollections = () => {
+    cancelCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setIsCollectionsOpen(false);
+    }, 180);
+  };
+
+  useEffect(() => () => cancelCloseTimer(), []);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 12);
@@ -121,20 +107,23 @@ export default function Header() {
             <ul className="flex items-center justify-center gap-5 xl:gap-8">
               <li
                 className="relative"
+                onMouseEnter={openCollections}
+                onMouseLeave={scheduleCloseCollections}
               >
                 <button
                   type="button"
                   aria-expanded={isCollectionsOpen}
                   aria-controls="collection-menu"
+                  aria-haspopup="true"
                   onClick={() => setIsCollectionsOpen((open) => !open)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#8d6b36] ${
+                  className={`flex items-center gap-1.5 whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#B8862B] ${
                     isCollectionsOpen || location.pathname.startsWith('/collection') || location.pathname === '/shop'
-                      ? 'text-[#8d6b36]'
+                      ? 'text-[#B8862B]'
                       : 'text-[#34312e]'
                   }`}
                 >
                   Our Collection
-                  <ChevronDown className={`h-4 w-4 transition-transform ${isCollectionsOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isCollectionsOpen ? 'rotate-180' : ''}`} />
                 </button>
               </li>
               <li>
@@ -211,12 +200,13 @@ export default function Header() {
             </button>
           </div>
         </div>
-        {isCollectionsOpen && (
-          <CollectionMenu
-            pathname={location.pathname}
-            onClose={() => setIsCollectionsOpen(false)}
-          />
-        )}
+        <MegaMenu
+          isOpen={isCollectionsOpen}
+          pathname={location.pathname}
+          onClose={() => setIsCollectionsOpen(false)}
+          onMouseEnter={openCollections}
+          onMouseLeave={scheduleCloseCollections}
+        />
       </header>
 
       <MobileNav isOpen={isMobileNavOpen} onClose={() => setIsMobileNavOpen(false)} />

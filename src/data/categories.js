@@ -64,6 +64,106 @@ export const NAV_CATEGORIES = [
   { name: 'Scarves', path: '/collection/scarves' }
 ];
 
+export const MEGA_MENU_GROUPS = [
+  'SHOP BY STYLE',
+  'OCCASION WEAR',
+  'FOR KIDS',
+  'ACCESSORIES'
+];
+
+export const MEGA_MENU_CATEGORIES = [
+  {
+    name: 'Shop All',
+    slug: 'shop-all',
+    path: '/shop',
+    image: '/hero-collection-1.png',
+    badge: null,
+    group: 'SHOP BY STYLE',
+    featuredTitle: 'Festive Edit — Up to 50% Off',
+    featuredSubtitle: 'Explore every handcrafted suit, lehenga, and ethnic essential.'
+  },
+  {
+    name: 'Casual Everyday Wear Suits',
+    slug: 'casual-wear',
+    path: '/collection/casual-wear',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/1E1687CB-99B0-4DF8-B0A1-477F97E542DC.png?v=1782829448',
+    badge: null,
+    group: 'SHOP BY STYLE',
+    featuredTitle: 'Everyday Cotton Luxury',
+    featuredSubtitle: 'Breathable 3-piece suits with intricate neck patches and dupattas.'
+  },
+  {
+    name: 'Salwar Kameez / Suit Sets',
+    slug: 'salwar-kameez-suit-sets',
+    path: '/collection/salwar-kameez-suit-sets',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/3A946126-52FC-4483-B2FA-DA3763993990.jpg?v=1782935535',
+    badge: 'Bestseller',
+    group: 'SHOP BY STYLE',
+    featuredTitle: 'Classic Salwar Kameez Sets',
+    featuredSubtitle: 'Signature thread & zarkan embroidery in soft slub cotton.'
+  },
+  {
+    name: 'Unstitched Suits',
+    slug: 'unstitched-suits',
+    path: '/collection/unstitched-suits',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/IMG_3452.jpg?v=1782585999',
+    badge: null,
+    group: 'SHOP BY STYLE',
+    featuredTitle: 'Unstitched Dress Materials',
+    featuredSubtitle: 'Pure cotton & silk fabrics with designer dupattas tailored to your fit.'
+  },
+  {
+    name: 'Lehenga Choli',
+    slug: 'lehenga-choli',
+    path: '/collection/lehenga-choli',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/85338475-1595-428f-853e-2a98d857df58.jpg?v=1782836139',
+    badge: 'Trending',
+    group: 'OCCASION WEAR',
+    featuredTitle: 'Royal Lehenga Choli Edit',
+    featuredSubtitle: 'Digital print silk and embroidered lehengas made for wedding season.'
+  },
+  {
+    name: 'Sharara & Gharara Suits',
+    slug: 'sharara-gharara-suits',
+    path: '/collection/sharara-gharara-suits',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/8a9d93c1-7f57-4374-acdd-49962b2aebd5.jpg?v=1782834331',
+    badge: 'New',
+    group: 'OCCASION WEAR',
+    featuredTitle: 'Festive Sharara & Gharara',
+    featuredSubtitle: 'Glamorous tiered silhouettes with sequin work and contrast dupattas.'
+  },
+  {
+    name: 'Dresses',
+    slug: 'dresses',
+    path: '/collection/dresses',
+    image: '/hero-collection-2.png',
+    badge: null,
+    group: 'OCCASION WEAR',
+    featuredTitle: 'Saree-Drape Gowns & Dresses',
+    featuredSubtitle: 'Contemporary georgette drapes with hand-embroidered belts.'
+  },
+  {
+    name: 'Kids Collection',
+    slug: 'kids-collection',
+    path: '/collection/kids-collection',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/81c960b0-5c23-4f4c-bd88-2b25f5b5a124.jpg?v=1782834977',
+    badge: null,
+    group: 'FOR KIDS',
+    featuredTitle: 'Little Heritage Festive Wear',
+    featuredSubtitle: 'Soft cotton-lined lehengas and kurta sets crafted for kids.'
+  },
+  {
+    name: 'Scarves',
+    slug: 'scarves',
+    path: '/collection/scarves',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/01_-_Light_Grey_4373ac79-46cb-446b-9110-f1f7e79839c2.jpg?v=1791976860',
+    badge: 'Bestseller',
+    group: 'ACCESSORIES',
+    featuredTitle: 'Premium Jersey Hijabs',
+    featuredSubtitle: 'Ultra-soft, double-stitched hijabs in 30+ pastel and earthy shades.'
+  }
+];
+
 export const SIGNATURE_COLLECTIONS = [
   {
     id: 'casual-wear',

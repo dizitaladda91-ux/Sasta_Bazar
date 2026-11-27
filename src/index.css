@@ -184,6 +184,38 @@
   height: auto;
 }
 
+/* Luxury Mega Menu Animations */
+@keyframes megaMenuEnter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes megaItemStagger {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-mega-menu {
+  animation: megaMenuEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-mega-item {
+  opacity: 0;
+  animation: megaItemStagger 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .product-description li + li {
   margin-top: 0.25rem;
 }

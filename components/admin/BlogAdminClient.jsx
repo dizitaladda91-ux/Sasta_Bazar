@@ -9,6 +9,17 @@ import RichTextEditor from './RichTextEditor';
 import Pagination from '../../src/components/common/Pagination';
 import { evaluateSeoScore, getSiteUrl, slugify } from '../../lib/blog-seo';
 
+const PRODUCT_CATEGORY_OPTIONS = [
+  { label: 'Casual Everyday Wear Suits', category: 'Ladies Collection', subcategory: 'Casual Everyday Wear Suits', collectionSlug: 'casual-wear' },
+  { label: 'Salwar Kameez / Suit Sets', category: 'Ladies Collection', subcategory: 'Salwar Kameez / Suit Sets', collectionSlug: 'salwar-kameez-suit-sets' },
+  { label: 'Dresses', category: 'Ladies Collection', subcategory: 'Dresses', collectionSlug: 'dresses' },
+  { label: 'Lehenga Choli', category: 'Ladies Collection', subcategory: 'Lehenga Choli', collectionSlug: 'lehenga-choli' },
+  { label: 'Sharara & Gharara Suits', category: 'Ladies Collection', subcategory: 'Sharara & Gharara Suits', collectionSlug: 'sharara-gharara-suits' },
+  { label: 'Kids Collection', category: 'Kids Collection', subcategory: 'Kids Ethnic Wear', collectionSlug: 'kids-collection' },
+  { label: 'Unstitched Suits', category: 'Unstitched Suits', subcategory: 'Unstitched Suits', collectionSlug: 'unstitched-suits' },
+  { label: 'Scarves & Hijabs', category: 'Scarves', subcategory: 'Premium Jersey Hijabs', collectionSlug: 'scarves' }
+];
+
 const EMPTY_FORM = {
   id: null,
   title: '',
@@ -371,6 +382,10 @@ export default function BlogAdminClient() {
       price: String(product.price ?? ''),
       compareAtPrice: product.compareAtPrice != null ? String(product.compareAtPrice) : '',
       stock: String(product.stock ?? 0),
+      originalStock: String(product.stock ?? 0),
+      collectionSlug: product.collectionSlug || 'casual-wear',
+      category: product.category || 'Ladies Collection',
+      subcategory: product.subcategory || 'Casual Everyday Wear Suits',
       primaryImage: product.primaryImage || product.images?.[0] || '',
       description: product.description || ''
     });
@@ -385,7 +400,10 @@ export default function BlogAdminClient() {
         title: editingProduct.title.trim(),
         price: Number(editingProduct.price),
         compareAtPrice: editingProduct.compareAtPrice ? Number(editingProduct.compareAtPrice) : null,
-        stock: Number(editingProduct.stock),
+        category: editingProduct.category,
+        subcategory: editingProduct.subcategory,
+        collectionSlug: editingProduct.collectionSlug,
+        ...(editingProduct.stock !== editingProduct.originalStock ? { stock: Number(editingProduct.stock) } : {}),
         images: editingProduct.primaryImage ? [editingProduct.primaryImage.trim()] : undefined,
         description: editingProduct.description
       };
@@ -595,7 +613,7 @@ export default function BlogAdminClient() {
                     <div className="min-w-0">
                       <h2 className="text-sm font-bold text-sasta-heading truncate">{product.title}</h2>
                       <p className="text-xs text-sasta-muted">
-                        £{Number(product.price).toFixed(2)} • Stock: {product.stock ?? 0} • /product/{product.handle}
+                        £{Number(product.price).toFixed(2)} • Stock: {product.stock ?? 0} • <span className="font-semibold text-sasta-gold-dark">{product.subcategory || product.category}</span>
                       </p>
                     </div>
                   </div>
@@ -1255,6 +1273,30 @@ export default function BlogAdminClient() {
                 onChange={(e) => setEditingProduct((p) => ({ ...p, title: e.target.value }))}
                 className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-sasta-heading mb-1">Category / Collection *</label>
+              <select
+                value={editingProduct.collectionSlug}
+                onChange={(e) => {
+                  const opt = PRODUCT_CATEGORY_OPTIONS.find((c) => c.collectionSlug === e.target.value);
+                  if (!opt) return;
+                  setEditingProduct((p) => ({
+                    ...p,
+                    collectionSlug: opt.collectionSlug,
+                    category: opt.category,
+                    subcategory: opt.subcategory
+                  }));
+                }}
+                className="w-full rounded-lg border border-sasta-border bg-white px-3 py-2 text-sm"
+              >
+                {PRODUCT_CATEGORY_OPTIONS.map((opt) => (
+                  <option key={opt.collectionSlug} value={opt.collectionSlug}>
+                    {opt.label} ({opt.category})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="grid grid-cols-3 gap-3">

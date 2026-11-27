@@ -274,7 +274,9 @@ export default function CartPage() {
               Thank You, {confirmedOrder.customer?.name}!
             </h2>
             <p className="text-xs sm:text-sm text-sasta-body leading-relaxed">
-              Your payment is confirmed. We will prepare your tracked UK delivery shortly.
+              {confirmedOrder.paymentMethod === 'Cash on Delivery (COD)'
+                ? 'Your COD order is confirmed! Please pay on delivery. We will prepare your tracked delivery shortly.'
+                : 'Your payment is confirmed. We will prepare your tracked UK delivery shortly.'}
             </p>
             <div className="p-4 bg-white rounded-lg border border-sasta-border text-xs space-y-1 text-left">
               <div className="flex justify-between">
@@ -282,7 +284,11 @@ export default function CartPage() {
                 <strong className="text-sasta-navy font-mono text-sm">{confirmedOrder.orderId}</strong>
               </div>
               <div className="flex justify-between">
-                <span className="text-sasta-muted">Total Paid:</span>
+                <span className="text-sasta-muted">Payment Method:</span>
+                <strong>{confirmedOrder.paymentMethod || 'Stripe'}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sasta-muted">{confirmedOrder.paymentMethod === 'Cash on Delivery (COD)' ? 'Amount Due on Delivery:' : 'Total Paid:'}</span>
                 <strong>£{confirmedOrder.total?.toFixed(2)}</strong>
               </div>
               <div className="flex justify-between">
@@ -292,6 +298,14 @@ export default function CartPage() {
             </div>
 
             <div className="pt-2 flex flex-col gap-2.5">
+              <a
+                href={`/api/orders/${encodeURIComponent(confirmedOrder.orderId)}/invoice?email=${encodeURIComponent(confirmedOrder.customer?.email || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full border border-sasta-navy bg-white hover:bg-sasta-yellow-light text-sasta-navy text-xs font-bold uppercase tracking-wider py-3 rounded-md shadow-xs transition-colors"
+              >
+                Download / Print Tax Invoice (GST Bill)
+              </a>
               <Link
                 to={`/track-order?id=${encodeURIComponent(confirmedOrder.orderId)}&email=${encodeURIComponent(confirmedOrder.customer?.email || '')}`}
                 className="w-full bg-sasta-navy hover:bg-sasta-navy-light text-white text-xs font-bold uppercase tracking-wider py-3 rounded-md shadow-xs transition-colors"

@@ -141,6 +141,14 @@ export default function TrackOrderPage() {
                     Tracking No: <strong className="text-sasta-navy">{order.trackingNumber}</strong>
                   </p>
                 )}
+                <a
+                  href={`/api/orders/${encodeURIComponent(order.orderId)}/invoice?email=${encodeURIComponent(emailInput || order.customer?.email || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block rounded-full border border-sasta-border bg-white px-3.5 py-1.5 text-[11px] font-bold text-sasta-navy hover:bg-sasta-yellow-light"
+                >
+                  Download / Print Tax Invoice
+                </a>
               </div>
             </div>
 

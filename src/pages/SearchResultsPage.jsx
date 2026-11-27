@@ -1,19 +1,28 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, ArrowLeft } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
+import Pagination from '../components/common/Pagination';
 import { useProducts } from '../hooks/useProducts';
 
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 24;
 
   useEffect(() => {
     document.title = `Search: "${query}" | SASTA BAZAAR`;
+    setCurrentPage(1);
     window.scrollTo(0, 0);
   }, [query]);
 
-  const { products: results } = useProducts({ search: query, enabled: Boolean(query.trim()) });
+  const { products: results } = useProducts({ search: query, limit: 250, enabled: Boolean(query.trim()) });
+  const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+  const paginatedResults = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return results.slice(start, start + PAGE_SIZE);
+  }, [results, currentPage]);
 
   return (
     <div className="bg-white min-h-screen py-10 sm:py-16">
@@ -31,11 +40,14 @@ export default function SearchResultsPage() {
         </div>
 
         {results.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {results.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {paginatedResults.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+            <Pagination page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+          </>
         ) : (
           <div className="max-w-md mx-auto text-center py-16 px-4 space-y-4 bg-sasta-yellow-cream/40 rounded-xl border border-sasta-border">
             <Search className="w-12 h-12 text-sasta-muted mx-auto" />

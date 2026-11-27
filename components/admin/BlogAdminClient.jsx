@@ -6,6 +6,7 @@ import {
   CheckCircle2, Code2, Copy, Edit3, ExternalLink, Globe, LogOut, Package, Plus, RefreshCw, Search, Trash2, Upload, XCircle
 } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
+import Pagination from '../../src/components/common/Pagination';
 import { evaluateSeoScore, getSiteUrl, slugify } from '../../lib/blog-seo';
 
 const EMPTY_FORM = {
@@ -73,6 +74,8 @@ export default function BlogAdminClient() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingProduct, setEditingProduct] = useState(null);
   const [savingProduct, setSavingProduct] = useState(false);
+  const [postsPage, setPostsPage] = useState(1);
+  const [productsPage, setProductsPage] = useState(1);
 
   const notify = (msg) => {
     setToast(msg);
@@ -82,7 +85,7 @@ export default function BlogAdminClient() {
   const loadDashboard = useCallback(async () => {
     const [blogRes, prodRes] = await Promise.all([
       apiJson(`/api/admin/blog/posts?status=${encodeURIComponent(statusFilter)}&search=${encodeURIComponent(searchTerm)}`),
-      apiJson('/api/products?limit=100').catch(() => ({ products: [] }))
+      apiJson('/api/products?limit=250').catch(() => ({ products: [] }))
     ]);
     setPosts(blogRes.posts || []);
     setCategories(blogRes.categories || []);
@@ -326,12 +329,29 @@ export default function BlogAdminClient() {
     }
   };
 
-  const filteredProducts = useMemo(() => {
+  const filteredAllProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
-    return storeProducts
-      .filter((p) => !q || p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q))
-      .slice(0, 30);
+    return storeProducts.filter((p) => !q || p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q));
   }, [storeProducts, productSearch]);
+
+  const filteredProducts = useMemo(() => filteredAllProducts.slice(0, 30), [filteredAllProducts]);
+
+  const ADMIN_POSTS_PER_PAGE = 10;
+  const postsTotalPages = Math.max(1, Math.ceil(posts.length / ADMIN_POSTS_PER_PAGE));
+  const paginatedPosts = useMemo(() => {
+    const start = (postsPage - 1) * ADMIN_POSTS_PER_PAGE;
+    return posts.slice(start, start + ADMIN_POSTS_PER_PAGE);
+  }, [posts, postsPage]);
+
+  const ADMIN_PRODUCTS_PER_PAGE = 20;
+  const productsTotalPages = Math.max(1, Math.ceil(filteredAllProducts.length / ADMIN_PRODUCTS_PER_PAGE));
+  const paginatedStoreProducts = useMemo(() => {
+    const start = (productsPage - 1) * ADMIN_PRODUCTS_PER_PAGE;
+    return filteredAllProducts.slice(start, start + ADMIN_PRODUCTS_PER_PAGE);
+  }, [filteredAllProducts, productsPage]);
+
+  useEffect(() => { setPostsPage(1); }, [statusFilter, searchTerm]);
+  useEffect(() => { setProductsPage(1); }, [productSearch]);
 
   const customSchemaStatus = useMemo(() => {
     const raw = (form.customSchema || '').trim();
@@ -564,7 +584,7 @@ export default function BlogAdminClient() {
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-sasta-border bg-white shadow-subtle divide-y divide-sasta-border">
-              {filteredProducts.map((product) => (
+              {paginatedStoreProducts.map((product) => (
                 <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-sasta-yellow-cream/40">
                   <div className="flex items-center gap-3 min-w-0">
                     <img
@@ -598,6 +618,7 @@ export default function BlogAdminClient() {
                 </div>
               ))}
             </div>
+            <Pagination page={productsPage} totalPages={productsTotalPages} onPageChange={setProductsPage} />
           </div>
         ) : mode === 'list' ? (
           <div className="space-y-5">
@@ -639,7 +660,7 @@ export default function BlogAdminClient() {
                 </div>
               ) : (
                 <div className="divide-y divide-sasta-border">
-                  {posts.map((post) => (
+                  {paginatedPosts.map((post) => (
                     <div key={post.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-5 hover:bg-sasta-yellow-cream/40">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -699,6 +720,7 @@ export default function BlogAdminClient() {
                 </div>
               )}
             </div>
+            <Pagination page={postsPage} totalPages={postsTotalPages} onPageChange={setPostsPage} />
           </div>
         ) : (
           <form onSubmit={handleSave} className="grid grid-cols-1 gap-6 lg:grid-cols-3">

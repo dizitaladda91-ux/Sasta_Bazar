@@ -135,7 +135,7 @@ export const pageQuery = z.object({
 
 export const productsQuery = z.object({
   page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(250).optional(),
   category: optionalText(120),
   subcategory: optionalText(120),
   search: optionalText(200),

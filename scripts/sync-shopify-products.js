@@ -1,7 +1,13 @@
+import dns from 'node:dns';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { inTransaction, pool } from '../server/db.js';
+
+dns.setDefaultResultOrder('ipv4first');
+const execFileAsync = promisify(execFile);
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_URL = 'https://sastabazaarclothing.com/collections/all/products.json';
@@ -130,18 +136,53 @@ function transformProduct(p, index) {
   };
 }
 
+async function fetchJsonWithRetry(url) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          Accept: 'application/json'
+        },
+        signal: AbortSignal.timeout(30_000)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 1000));
+    }
+  }
+  try {
+    const { stdout } = await execFileAsync('curl', [
+      '-fsSL', '--max-time', '30', '-H', 'Accept: application/json',
+      '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', url
+    ], { maxBuffer: 25 * 1024 * 1024 });
+    return JSON.parse(stdout);
+  } catch (curlError) {
+    const reason = lastError?.cause?.message || lastError?.message || curlError.message;
+    throw new Error(`Could not fetch ${url}: ${reason}`);
+  }
+}
+
 async function fetchAllShopifyProducts() {
-  const all = [];
+  const byHandle = new Map();
   for (let page = 1; page <= 50; page += 1) {
-    const res = await fetch(`${SOURCE_URL}?limit=250&page=${page}`);
-    if (!res.ok) throw new Error(`Failed to fetch page ${page}: HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await fetchJsonWithRetry(`https://sastabazaarclothing.com/products.json?limit=250&page=${page}`);
     const batch = data.products || [];
     if (!batch.length) break;
-    all.push(...batch);
+    for (const p of batch) byHandle.set(p.handle, p);
     if (batch.length < 250) break;
   }
-  return all;
+  const cols = await fetchJsonWithRetry('https://sastabazaarclothing.com/collections.json?limit=250').catch(() => ({ collections: [] }));
+  for (const col of cols.collections || []) {
+    const data = await fetchJsonWithRetry(`https://sastabazaarclothing.com/collections/${col.handle}/products.json?limit=250`).catch(() => ({ products: [] }));
+    for (const p of data.products || []) {
+      if (!byHandle.has(p.handle)) byHandle.set(p.handle, p);
+    }
+  }
+  return [...byHandle.values()];
 }
 
 async function main() {

@@ -28,6 +28,8 @@ import { processStripeEvent } from './services/stripe-webhook.js';
 import { sendAdminNewOrderAlert, sendOrderConfirmationEmail, sendOrderDispatchedEmail } from './services/email.js';
 import { appCache, TTL } from './services/cache.js';
 import { sessionStore } from './services/sessionStore.js';
+import { renderOrderInvoiceHtml } from './services/invoice.js';
+import { cartStore, getCartKey } from './services/cartStore.js';
 import { verifyPassword } from './services/passwordRules.js';
 import { calculateCouponDiscount, hasCouponUsageAvailable } from './services/couponRules.js';
 import { getReservationLockKeys, hasReservationCapacity } from './services/reservationRules.js';
@@ -337,7 +339,7 @@ const invalidateCatalogCache = () => {
 app.get('/api/products', validate({ query: productsQuery }), route(async (req, res) => {
   const { page, limit, category, subcategory, search, filter, sort, collection } = req.validated.query;
   const currentPage = page ?? 1;
-  const pageSize = limit ?? 100;
+  const pageSize = limit ?? 250;
   const cacheKey = `products:${JSON.stringify({
     page: currentPage, limit: pageSize, category: category || '', subcategory: subcategory || '',
     search: search || '', filter: filter || '', sort: sort || '', collection: collection || ''
@@ -448,6 +450,64 @@ app.get('/api/config', route(async (_req, res) => {
   res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=1800');
   res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
   res.json({ success: true, config });
+}));
+
+function resolveCartKey(req, res) {
+  if (req.user?.id) return getCartKey({ userId: req.user.id });
+  let guestId = req.cookies?.sb_cart_id;
+  if (!guestId || !/^[a-zA-Z0-9_-]{8,80}$/.test(guestId)) {
+    guestId = crypto.randomUUID();
+    res.cookie('sb_cart_id', guestId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+  }
+  return getCartKey({ guestId });
+}
+
+app.get('/api/cart', optionalAuth, route(async (req, res) => {
+  const cartKey = resolveCartKey(req, res);
+  const items = await cartStore.getItems(cartKey);
+  res.json({ success: true, cartKey, backend: cartStore.backendKind, items });
+}));
+
+app.post('/api/cart/items', optionalAuth, route(async (req, res) => {
+  const item = req.body;
+  if (!item || !item.id || !item.title) {
+    return res.status(400).json({ success: false, message: 'Valid cart item is required.' });
+  }
+  const cartKey = resolveCartKey(req, res);
+  const items = await cartStore.addItem(cartKey, item);
+  res.json({ success: true, cartKey, items });
+}));
+
+app.patch('/api/cart/items/:itemKey', optionalAuth, route(async (req, res) => {
+  const cartKey = resolveCartKey(req, res);
+  const items = await cartStore.setItemQuantity(cartKey, req.params.itemKey, Number(req.body?.quantity ?? 1));
+  res.json({ success: true, cartKey, items });
+}));
+
+app.delete('/api/cart/items/:itemKey', optionalAuth, route(async (req, res) => {
+  const cartKey = resolveCartKey(req, res);
+  const items = await cartStore.removeItem(cartKey, req.params.itemKey);
+  res.json({ success: true, cartKey, items });
+}));
+
+app.delete('/api/cart', optionalAuth, route(async (req, res) => {
+  const cartKey = resolveCartKey(req, res);
+  await cartStore.clearCart(cartKey);
+  res.json({ success: true, cartKey, items: [] });
+}));
+
+app.post('/api/cart/merge', requireAuth, route(async (req, res) => {
+  const guestId = req.cookies?.sb_cart_id;
+  const userKey = getCartKey({ userId: req.user.id });
+  const guestKey = guestId ? getCartKey({ guestId }) : null;
+  const items = await cartStore.mergeCarts(guestKey, userKey);
+  res.json({ success: true, cartKey: userKey, items });
 }));
 
 app.post('/api/coupons/validate', generalLimiter, route(async (req, res) => {
@@ -715,6 +775,27 @@ app.get('/api/orders/:orderId', trackLimiter, optionalAuth,
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
     return res.json({ success: true, order: await getOrder(orderId) });
+  }));
+
+app.get('/api/orders/:orderId/invoice', trackLimiter, optionalAuth,
+  validate({ params: orderIdParams, query: trackingQuery }), route(async (req, res) => {
+    const { orderId } = req.validated.params;
+    const { rows } = await query(
+      'SELECT id, user_id, customer_email FROM orders WHERE order_ref=$1',
+      [normalizeOrderReference(orderId)]
+    );
+    if (!rows.length) return res.status(404).send('Order not found.');
+    const orderRecord = rows[0];
+    const isAdmin = req.user?.role === 'admin';
+    const isOwner = req.user && String(req.user.id) === String(orderRecord.user_id);
+    const hasMatchingEmail = req.validated.query.email
+      && orderRecord.customer_email.toLowerCase() === req.validated.query.email;
+    if (!isAdmin && !isOwner && !hasMatchingEmail) {
+      return res.status(404).send('Order not found.');
+    }
+    const order = await getOrder(orderId);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(renderOrderInvoiceHtml(order));
   }));
 
 app.post('/api/contact', contactLimiter, validate({ body: contactBody }), route(async (req, res) => {

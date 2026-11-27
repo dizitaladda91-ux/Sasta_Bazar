@@ -26,6 +26,12 @@ export const api = {
     return (await request(`/products${query ? `?${query}` : ''}`)).products.map(withProductImages);
   },
   async getProduct(handle) { return withProductImages((await request(`/products/${encodeURIComponent(handle)}`)).product); },
+  async getCart() { return request('/cart'); },
+  async addCartItem(item) { return request('/cart/items', json('POST', item)); },
+  async updateCartItem(itemKey, quantity) { return request(`/cart/items/${encodeURIComponent(itemKey)}`, json('PATCH', { quantity })); },
+  async removeCartItem(itemKey) { return request(`/cart/items/${encodeURIComponent(itemKey)}`, { method: 'DELETE' }); },
+  async clearServerCart() { return request('/cart', { method: 'DELETE' }); },
+  async mergeCart() { return request('/cart/merge', { method: 'POST' }); },
   async createPaymentIntent(payload) {
     return request('/checkout/create-payment-intent', json('POST', payload));
   },

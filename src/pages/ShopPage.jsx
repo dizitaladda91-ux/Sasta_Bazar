@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Filter, X, ChevronDown, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
+import Pagination from '../components/common/Pagination';
 import { useProducts } from '../hooks/useProducts';
 
 export default function ShopPage() {
@@ -14,7 +15,9 @@ export default function ShopPage() {
   const [priceRange, setPriceRange] = useState(100);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'featured');
-  const { products: catalogProducts } = useProducts();
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 24;
+  const { products: catalogProducts } = useProducts({ limit: 250 });
 
   const filterParam = searchParams.get('filter'); // 'new' or 'sale'
 
@@ -87,6 +90,16 @@ export default function ShopPage() {
       return (b.isBestSeller ? 1 : 0) - (a.isBestSeller ? 1 : 0);
     });
   }, [catalogProducts, selectedCategory, selectedSize, priceRange, onlyAvailable, sortBy, filterParam]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, selectedSize, priceRange, onlyAvailable, sortBy, filterParam]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredProducts, currentPage]);
 
   const clearAllFilters = () => {
     setSelectedCategory('All');
@@ -309,11 +322,14 @@ export default function ShopPage() {
             )}
 
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                  {paginatedProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+                <Pagination page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+              </>
             ) : (
               <div className="py-20 text-center bg-sasta-yellow-cream/30 rounded-lg border border-dashed border-sasta-border space-y-4">
                 <p className="font-serif text-lg text-sasta-heading font-bold">

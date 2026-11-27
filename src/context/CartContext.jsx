@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { ENV } from '../config/env';
 import { getProductImageSet } from '../data/imageCatalog';
+import { api } from '../services/api';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -37,6 +39,33 @@ export function CartProvider({ children }) {
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [notification, setNotification] = useState(null);
+  const { user } = useAuth();
+  const prevUserId = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    const syncCart = async () => {
+      try {
+        const currentUserId = user?.id || null;
+        if (currentUserId && prevUserId.current !== currentUserId) {
+          prevUserId.current = currentUserId;
+          const merged = await api.mergeCart();
+          if (active && Array.isArray(merged.items) && merged.items.length > 0) {
+            setCartItems(merged.items.map(normalizeCartItem));
+          }
+          return;
+        }
+        const res = await api.getCart();
+        if (active && Array.isArray(res.items) && res.items.length > 0) {
+          setCartItems(res.items.map(normalizeCartItem));
+        }
+      } catch {
+        // Keep localStorage cart working offline or when Redis/API is unavailable.
+      }
+    };
+    syncCart();
+    return () => { active = false; };
+  }, [user?.id]);
 
   useEffect(() => {
     try {
@@ -71,25 +100,38 @@ export function CartProvider({ children }) {
         };
         return updated;
       } else {
-        return [
-          ...prev,
-          {
-            itemKey,
-            id: product.id,
-            variantId: selectedVariant?.id,
-            handle: product.handle,
-            title: product.title,
-            price: product.price,
-            compareAtPrice: product.compareAtPrice,
-            image: product.primaryImage || (product.images && product.images[0]) || '',
-            size: defaultSize || selectedVariant?.size || null,
-            color: defaultColor || selectedVariant?.color || null,
-            quantity: quantity,
-            currency: '£'
-          }
-        ];
+        const newItem = {
+          itemKey,
+          id: product.id,
+          variantId: selectedVariant?.id,
+          handle: product.handle,
+          title: product.title,
+          price: product.price,
+          compareAtPrice: product.compareAtPrice,
+          image: product.primaryImage || (product.images && product.images[0]) || '',
+          size: defaultSize || selectedVariant?.size || null,
+          color: defaultColor || selectedVariant?.color || null,
+          quantity: quantity,
+          currency: '£'
+        };
+        return [...prev, newItem];
       }
     });
+
+    api.addCartItem({
+      itemKey,
+      id: product.id,
+      variantId: selectedVariant?.id,
+      handle: product.handle,
+      title: product.title,
+      price: product.price,
+      compareAtPrice: product.compareAtPrice,
+      image: product.primaryImage || (product.images && product.images[0]) || '',
+      size: defaultSize || selectedVariant?.size || null,
+      color: defaultColor || selectedVariant?.color || null,
+      quantity,
+      currency: '£'
+    }).catch(() => {});
 
     setIsCartOpen(true);
     showNotification(`Added "${product.title}" to your bag`);
@@ -103,14 +145,17 @@ export function CartProvider({ children }) {
     setCartItems(prev =>
       prev.map(item => (item.itemKey === itemKey ? { ...item, quantity: newQuantity } : item))
     );
+    api.updateCartItem(itemKey, newQuantity).catch(() => {});
   };
 
   const removeFromCart = (itemKey) => {
     setCartItems(prev => prev.filter(item => item.itemKey !== itemKey));
+    api.removeCartItem(itemKey).catch(() => {});
   };
 
   const clearCart = () => {
     setCartItems([]);
+    api.clearServerCart().catch(() => {});
   };
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);

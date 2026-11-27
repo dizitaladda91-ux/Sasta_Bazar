@@ -1,16 +1,29 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
+import Pagination from '../components/common/Pagination';
 import { useProducts } from '../hooks/useProducts';
 import { useStorefrontContent } from '../hooks/useStorefrontContent';
 
 export default function CollectionPage() {
   const { slug } = useParams();
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 24;
 
   const { content: collectionPages } = useStorefrontContent('collection_pages');
   const collectionInfo = collectionPages?.[slug];
-  const { products } = useProducts({ collection: slug });
+  const { products } = useProducts({ collection: slug, limit: 250 });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [slug]);
+
+  const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return products.slice(start, start + PAGE_SIZE);
+  }, [products, currentPage]);
 
   useEffect(() => {
     if (!collectionInfo) return;
@@ -50,11 +63,14 @@ export default function CollectionPage() {
 
         {/* Product Grid */}
         {products.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {paginatedProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+            <Pagination page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+          </>
         ) : (
           <div className="py-20 text-center bg-sasta-yellow-cream/40 rounded-lg border border-dashed border-sasta-border space-y-4">
             <p className="font-serif text-lg font-bold text-sasta-heading">

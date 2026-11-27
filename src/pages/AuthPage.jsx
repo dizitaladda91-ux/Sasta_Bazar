@@ -383,6 +383,14 @@ export default function AuthPage() {
                             <span className="font-bold text-xs text-sasta-heading">
                               £{order.total?.toFixed(2)}
                             </span>
+                            <a
+                              href={`/api/orders/${encodeURIComponent(order.orderId)}/invoice`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-sasta-navy underline hover:text-sasta-gold-dark"
+                            >
+                              Invoice
+                            </a>
                           </div>
                         </div>
 

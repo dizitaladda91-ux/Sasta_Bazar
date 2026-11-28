@@ -15,9 +15,17 @@ const PRODUCT_CATEGORY_OPTIONS = [
   { label: 'Dresses', category: 'Ladies Collection', subcategory: 'Dresses', collectionSlug: 'dresses' },
   { label: 'Lehenga Choli', category: 'Ladies Collection', subcategory: 'Lehenga Choli', collectionSlug: 'lehenga-choli' },
   { label: 'Sharara & Gharara Suits', category: 'Ladies Collection', subcategory: 'Sharara & Gharara Suits', collectionSlug: 'sharara-gharara-suits' },
-  { label: 'Kids Collection', category: 'Kids Collection', subcategory: 'Kids Ethnic Wear', collectionSlug: 'kids-collection' },
+  { label: 'Kids Collection — All', category: 'Kids Collection', subcategory: 'Kids Ethnic Wear', collectionSlug: 'kids-collection' },
+  { label: 'Kids Collection — Sharara', category: 'Kids Collection', subcategory: 'Kids Sharara', collectionSlug: 'kids-collection' },
+  { label: 'Kids Collection — Salwar Suit', category: 'Kids Collection', subcategory: 'Kids Salwar Suit', collectionSlug: 'kids-collection' },
+  { label: 'Kids Collection — Dresses', category: 'Kids Collection', subcategory: 'Kids Dresses', collectionSlug: 'kids-collection' },
+  { label: 'Kids Collection — Lehnga', category: 'Kids Collection', subcategory: 'Kids Lehnga', collectionSlug: 'kids-collection' },
   { label: 'Unstitched Suits', category: 'Unstitched Suits', subcategory: 'Unstitched Suits', collectionSlug: 'unstitched-suits' },
-  { label: 'Scarves & Hijabs', category: 'Scarves', subcategory: 'Premium Jersey Hijabs', collectionSlug: 'scarves' }
+  { label: "Women's Hijab — Double Stitched", category: 'Scarves', subcategory: 'Double Stitched', collectionSlug: 'scarves' },
+  { label: "Women's Hijab — Linen", category: 'Scarves', subcategory: 'Linen', collectionSlug: 'scarves' },
+  { label: "Women's Hijab — Jersey", category: 'Scarves', subcategory: 'Jersey', collectionSlug: 'scarves' },
+  { label: "Women's Hijab — Cotton Silk", category: 'Scarves', subcategory: 'Cotton Silk', collectionSlug: 'scarves' },
+  { label: 'Scarves & Hijabs (All)', category: 'Scarves', subcategory: 'Premium Jersey Hijabs', collectionSlug: 'scarves' }
 ];
 
 const EMPTY_FORM = {
@@ -367,6 +375,11 @@ export default function BlogAdminClient() {
   }, [form.customSchema]);
 
   const openProductEditor = (product) => {
+    const initialImages = Array.isArray(product.images) && product.images.length
+      ? product.images.filter(Boolean)
+      : product.primaryImage
+        ? [product.primaryImage, ...(product.hoverImage && product.hoverImage !== product.primaryImage ? [product.hoverImage] : [])]
+        : [];
     setEditingProduct({
       id: product.id,
       title: product.title || '',
@@ -377,7 +390,13 @@ export default function BlogAdminClient() {
       collectionSlug: product.collectionSlug || 'casual-wear',
       category: product.category || 'Ladies Collection',
       subcategory: product.subcategory || 'Casual Everyday Wear Suits',
-      primaryImage: product.primaryImage || product.images?.[0] || '',
+      images: initialImages,
+      newImageUrl: '',
+      sizesInput: Array.isArray(product.sizes) ? product.sizes.join(', ') : '',
+      colorsInput: Array.isArray(product.colors) ? product.colors.join(', ') : '',
+      isNewArrival: Boolean(product.isNewArrival),
+      isBestSeller: Boolean(product.isBestSeller),
+      isActive: product.isActive !== false,
       description: product.description || ''
     });
   };
@@ -387,15 +406,29 @@ export default function BlogAdminClient() {
     if (!editingProduct) return;
     setSavingProduct(true);
     try {
+      const cleanedImages = (editingProduct.images || []).map((u) => u.trim()).filter(Boolean);
+      const parsedSizes = editingProduct.sizesInput
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const parsedColors = editingProduct.colorsInput
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
       const payload = {
         title: editingProduct.title.trim(),
         price: Number(editingProduct.price),
         compareAtPrice: editingProduct.compareAtPrice ? Number(editingProduct.compareAtPrice) : null,
-        category: editingProduct.category,
-        subcategory: editingProduct.subcategory,
+        category: editingProduct.category.trim() || 'Ladies Collection',
+        subcategory: editingProduct.subcategory.trim() || 'Uncategorized',
         collectionSlug: editingProduct.collectionSlug,
         ...(editingProduct.stock !== editingProduct.originalStock ? { stock: Number(editingProduct.stock) } : {}),
-        images: editingProduct.primaryImage ? [editingProduct.primaryImage.trim()] : undefined,
+        images: cleanedImages,
+        sizes: parsedSizes,
+        colors: parsedColors,
+        isNewArrival: Boolean(editingProduct.isNewArrival),
+        isBestSeller: Boolean(editingProduct.isBestSeller),
+        isActive: Boolean(editingProduct.isActive),
         description: editingProduct.description
       };
       await apiJson(`/api/admin/products/${encodeURIComponent(editingProduct.id)}`, {
@@ -1123,143 +1156,362 @@ export default function BlogAdminClient() {
         )}
       </div>
 
-      {/* Quick Product Edit Modal */}
-      {editingProduct && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-          <form onSubmit={handleSaveProduct} className="w-full max-w-lg rounded-2xl border border-sasta-border bg-white p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-sasta-border pb-3">
-              <h2 className="text-lg font-bold text-sasta-heading">Edit Store Product</h2>
-              <button type="button" onClick={() => setEditingProduct(null)} className="text-xs text-sasta-muted hover:text-sasta-heading">
-                Close
-              </button>
-            </div>
+      {/* Full Store Product Edit Modal */}
+      {editingProduct && (() => {
+        const numPrice = Number(editingProduct.price) || 0;
+        const numCompare = Number(editingProduct.compareAtPrice) || 0;
+        const previewDiscount = numCompare > numPrice && numCompare > 0
+          ? Math.round(((numCompare - numPrice) / numCompare) * 100)
+          : 0;
+        const selectedCategoryOptionValue = `${editingProduct.collectionSlug}::${editingProduct.subcategory}`;
+        const matchedOption = PRODUCT_CATEGORY_OPTIONS.find(
+          (c) => `${c.collectionSlug}::${c.subcategory}` === selectedCategoryOptionValue
+        ) || PRODUCT_CATEGORY_OPTIONS.find((c) => c.collectionSlug === editingProduct.collectionSlug);
+        const previewPrimary = editingProduct.images?.[0] || '/hero-collection-1.png';
 
-            <div>
-              <label className="block text-xs font-semibold text-sasta-heading mb-1">Product Title *</label>
-              <input
-                type="text"
-                required
-                value={editingProduct.title}
-                onChange={(e) => setEditingProduct((p) => ({ ...p, title: e.target.value }))}
-                className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-sasta-heading mb-1">Category / Collection *</label>
-              <select
-                value={editingProduct.collectionSlug}
-                onChange={(e) => {
-                  const opt = PRODUCT_CATEGORY_OPTIONS.find((c) => c.collectionSlug === e.target.value);
-                  if (!opt) return;
-                  setEditingProduct((p) => ({
-                    ...p,
-                    collectionSlug: opt.collectionSlug,
-                    category: opt.category,
-                    subcategory: opt.subcategory
-                  }));
-                }}
-                className="w-full rounded-lg border border-sasta-border bg-white px-3 py-2 text-sm"
-              >
-                {PRODUCT_CATEGORY_OPTIONS.map((opt) => (
-                  <option key={opt.collectionSlug} value={opt.collectionSlug}>
-                    {opt.label} ({opt.category})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-sasta-heading mb-1">Price (£) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={editingProduct.price}
-                  onChange={(e) => setEditingProduct((p) => ({ ...p, price: e.target.value }))}
-                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
-                />
+        return (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-3 sm:p-5 overflow-y-auto">
+            <form
+              onSubmit={handleSaveProduct}
+              className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl border border-sasta-border bg-white p-5 sm:p-6 shadow-2xl space-y-5"
+            >
+              <div className="flex items-center justify-between border-b border-sasta-border pb-3 sticky top-0 bg-white z-10">
+                <div>
+                  <h2 className="text-lg font-bold text-sasta-heading">Edit Store Product</h2>
+                  <p className="text-[11px] text-sasta-muted">Update every detail shown on product cards and product pages.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="rounded-full border border-sasta-border px-3 py-1 text-xs font-semibold text-sasta-muted hover:text-sasta-heading"
+                >
+                  Close
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-sasta-heading mb-1">Compare (£)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editingProduct.compareAtPrice}
-                  onChange={(e) => setEditingProduct((p) => ({ ...p, compareAtPrice: e.target.value }))}
-                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-sasta-heading mb-1">Stock</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editingProduct.stock}
-                  onChange={(e) => setEditingProduct((p) => ({ ...p, stock: e.target.value }))}
-                  className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-sasta-heading mb-1">Primary Image URL</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={editingProduct.primaryImage}
-                  onChange={(e) => setEditingProduct((p) => ({ ...p, primaryImage: e.target.value }))}
-                  className="flex-1 rounded-lg border border-sasta-border px-3 py-2 text-xs"
-                />
-                <label className="cursor-pointer rounded-lg border border-sasta-border bg-sasta-yellow-cream px-3 py-2 text-xs font-semibold hover:bg-sasta-yellow-light">
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/avif"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = '';
-                      if (!file) return;
-                      try {
-                        const url = await uploadImageFile(file);
-                        setEditingProduct((p) => ({ ...p, primaryImage: url }));
-                        notify('Product image uploaded!');
-                      } catch (err) {
-                        notify(err.message);
-                      }
-                    }}
-                  />
-                </label>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left 2 Columns: All Editable Fields */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-sasta-heading mb-1">Product Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingProduct.title}
+                      onChange={(e) => setEditingProduct((p) => ({ ...p, title: e.target.value }))}
+                      className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Category / Collection *</label>
+                      <select
+                        value={matchedOption ? `${matchedOption.collectionSlug}::${matchedOption.subcategory}` : ''}
+                        onChange={(e) => {
+                          const opt = PRODUCT_CATEGORY_OPTIONS.find(
+                            (c) => `${c.collectionSlug}::${c.subcategory}` === e.target.value
+                          );
+                          if (!opt) return;
+                          setEditingProduct((p) => ({
+                            ...p,
+                            collectionSlug: opt.collectionSlug,
+                            category: opt.category,
+                            subcategory: opt.subcategory
+                          }));
+                        }}
+                        className="w-full rounded-lg border border-sasta-border bg-white px-3 py-2 text-sm"
+                      >
+                        {PRODUCT_CATEGORY_OPTIONS.map((opt) => (
+                          <option
+                            key={`${opt.collectionSlug}::${opt.subcategory}`}
+                            value={`${opt.collectionSlug}::${opt.subcategory}`}
+                          >
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Card Label (Subcategory) *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingProduct.subcategory}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, subcategory: e.target.value }))}
+                        placeholder="e.g. Double Stitched, Kids Sharara"
+                        className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Price (£) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        value={editingProduct.price}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, price: e.target.value }))}
+                        className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">
+                        Compare (£) {previewDiscount > 0 && <span className="text-sasta-gold-dark font-bold">({previewDiscount}% OFF)</span>}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editingProduct.compareAtPrice}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, compareAtPrice: e.target.value }))}
+                        placeholder="Original price"
+                        className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Stock</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editingProduct.stock}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, stock: e.target.value }))}
+                        className="w-full rounded-lg border border-sasta-border px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card Badges & Visibility */}
+                  <div className="rounded-xl border border-sasta-border bg-sasta-yellow-cream/40 p-3 flex flex-wrap gap-4">
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-sasta-heading cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingProduct.isNewArrival}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, isNewArrival: e.target.checked }))}
+                        className="rounded border-sasta-border"
+                      />
+                      <span>New Arrival Badge (NEW)</span>
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-sasta-heading cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingProduct.isBestSeller}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, isBestSeller: e.target.checked }))}
+                        className="rounded border-sasta-border"
+                      />
+                      <span>Best Seller</span>
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-sasta-heading cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingProduct.isActive}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, isActive: e.target.checked }))}
+                        className="rounded border-sasta-border"
+                      />
+                      <span>Active (Visible on Store)</span>
+                    </label>
+                  </div>
+
+                  {/* Sizes & Colors */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Sizes (comma separated)</label>
+                      <input
+                        type="text"
+                        value={editingProduct.sizesInput}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, sizesInput: e.target.value }))}
+                        placeholder="S, M, L, XL, XXL"
+                        className="w-full rounded-lg border border-sasta-border px-3 py-2 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-sasta-heading mb-1">Colors (comma separated)</label>
+                      <input
+                        type="text"
+                        value={editingProduct.colorsInput}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, colorsInput: e.target.value }))}
+                        placeholder="Black, Beige, Emerald"
+                        className="w-full rounded-lg border border-sasta-border px-3 py-2 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Product Images (Primary, Hover & Gallery) */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-sasta-heading">
+                      Product Images (1st = Primary, 2nd = Hover Image)
+                    </label>
+                    {editingProduct.images?.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                        {editingProduct.images.map((imgUrl, idx) => (
+                          <div key={`${imgUrl}-${idx}`} className="relative rounded-lg border border-sasta-border bg-neutral-50 p-1.5 space-y-1">
+                            <img
+                              src={imgUrl}
+                              alt={`Product ${idx + 1}`}
+                              className="h-24 w-full rounded object-cover"
+                            />
+                            <div className="flex items-center justify-between gap-1 text-[10px]">
+                              <span className="font-bold text-sasta-gold-dark truncate">
+                                {idx === 0 ? 'Primary' : idx === 1 ? 'Hover' : `#${idx + 1}`}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {idx > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingProduct((p) => {
+                                      const next = [...p.images];
+                                      const [picked] = next.splice(idx, 1);
+                                      next.unshift(picked);
+                                      return { ...p, images: next };
+                                    })}
+                                    className="rounded bg-sasta-yellow-cream px-1.5 py-0.5 font-semibold text-sasta-heading hover:bg-sasta-gold"
+                                    title="Make Primary"
+                                  >
+                                    1st
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingProduct((p) => ({
+                                    ...p,
+                                    images: p.images.filter((_, i) => i !== idx)
+                                  }))}
+                                  className="rounded bg-rose-50 px-1.5 py-0.5 font-bold text-rose-600 hover:bg-rose-100"
+                                  title="Remove Image"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="text"
+                        value={editingProduct.newImageUrl}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, newImageUrl: e.target.value }))}
+                        placeholder="Paste image URL and click Add..."
+                        className="flex-1 min-w-[180px] rounded-lg border border-sasta-border px-3 py-2 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = (editingProduct.newImageUrl || '').trim();
+                          if (!url) return;
+                          setEditingProduct((p) => ({
+                            ...p,
+                            images: [...(p.images || []), url],
+                            newImageUrl: ''
+                          }));
+                        }}
+                        className="rounded-lg border border-sasta-border bg-white px-3 py-2 text-xs font-semibold hover:bg-sasta-yellow-cream"
+                      >
+                        Add URL
+                      </button>
+                      <label className="cursor-pointer rounded-lg border border-sasta-border bg-sasta-yellow-cream px-3 py-2 text-xs font-semibold hover:bg-sasta-yellow-light">
+                        Upload Image
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/avif"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = '';
+                            if (!file) return;
+                            try {
+                              const url = await uploadImageFile(file);
+                              setEditingProduct((p) => ({ ...p, images: [...(p.images || []), url] }));
+                              notify('Product image uploaded!');
+                            } catch (err) {
+                              notify(err.message);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-sasta-heading mb-1">Description</label>
+                    <textarea
+                      rows={5}
+                      value={editingProduct.description}
+                      onChange={(e) => setEditingProduct((p) => ({ ...p, description: e.target.value }))}
+                      className="w-full rounded-lg border border-sasta-border px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column: Live Card Preview */}
+                <div className="lg:col-span-1">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sasta-gold-dark mb-2">
+                    Live Card Preview
+                  </p>
+                  <div className="rounded-md border border-sasta-border/80 bg-white overflow-hidden shadow-sm">
+                    <div className="relative aspect-[2/3] w-full bg-neutral-100">
+                      <img src={previewPrimary} alt={editingProduct.title} className="h-full w-full object-cover" />
+                      <div className="absolute top-2.5 left-2.5 flex flex-col gap-1">
+                        {previewDiscount > 0 && (
+                          <span className="bg-sasta-gold text-sasta-heading text-[10px] font-bold px-2 py-0.5 uppercase rounded">
+                            {previewDiscount}% OFF
+                          </span>
+                        )}
+                        {editingProduct.isNewArrival && Number(editingProduct.stock) > 0 && (
+                          <span className="bg-sasta-yellow-cream text-sasta-heading border border-sasta-border text-[9px] font-bold px-1.5 py-0.5 uppercase rounded">
+                            New
+                          </span>
+                        )}
+                      </div>
+                      {Number(editingProduct.stock) <= 0 && (
+                        <div className="absolute inset-x-2 bottom-2 bg-neutral-800/90 text-white text-xs font-semibold text-center py-2 rounded">
+                          Out of Stock
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-sasta-muted block">
+                        {editingProduct.subcategory || editingProduct.category}
+                      </span>
+                      <p className="text-xs font-medium text-sasta-heading line-clamp-2">
+                        {editingProduct.title || 'Product Title'}
+                      </p>
+                      <div className="pt-1.5 border-t border-sasta-border/40 flex items-baseline gap-2">
+                        <span className="font-bold text-sm text-sasta-heading">
+                          £{numPrice.toFixed(2)}
+                        </span>
+                        {numCompare > numPrice && (
+                          <span className="text-xs text-sasta-muted line-through">
+                            £{numCompare.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-sasta-heading mb-1">Description</label>
-              <textarea
-                rows={3}
-                value={editingProduct.description}
-                onChange={(e) => setEditingProduct((p) => ({ ...p, description: e.target.value }))}
-                className="w-full rounded-lg border border-sasta-border px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setEditingProduct(null)} className="rounded-full border border-sasta-border px-4 py-2 text-xs font-semibold">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={savingProduct}
-                className="rounded-full bg-sasta-gold px-5 py-2 text-xs font-bold uppercase tracking-wider text-sasta-heading hover:bg-sasta-gold-hover disabled:opacity-60"
-              >
-                {savingProduct ? 'Saving…' : 'Save Product'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+              <div className="flex justify-end gap-2 border-t border-sasta-border pt-3 sticky bottom-0 bg-white">
+                <button type="button" onClick={() => setEditingProduct(null)} className="rounded-full border border-sasta-border px-4 py-2 text-xs font-semibold">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingProduct}
+                  className="rounded-full bg-sasta-gold px-5 py-2 text-xs font-bold uppercase tracking-wider text-sasta-heading hover:bg-sasta-gold-hover disabled:opacity-60"
+                >
+                  {savingProduct ? 'Saving…' : 'Save Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
     </div>
   );
 }

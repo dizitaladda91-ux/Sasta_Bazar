@@ -141,12 +141,12 @@ export default function ShopPage() {
               </p>
             </div>
 
-            {/* Mobile Filter Toggle & Sort */}
+            {/* Filter Drawer Toggle & Sort */}
             <div className="flex items-center justify-center sm:justify-end gap-3 pt-2 sm:pt-0">
               <button
                 type="button"
                 onClick={() => setMobileFilterOpen(true)}
-                className="lg:hidden inline-flex items-center gap-1.5 bg-sasta-yellow-cream border border-sasta-border px-4 py-2 rounded-md text-xs font-bold text-sasta-heading hover:bg-white"
+                className="inline-flex items-center gap-1.5 bg-sasta-yellow-cream border border-sasta-border px-4 py-2 rounded-md text-xs font-bold text-sasta-heading hover:bg-sasta-yellow-soft transition-colors"
               >
                 <SlidersHorizontal className="w-4 h-4 text-sasta-gold-dark" />
                 <span>Filters {hasActiveFilters && '(Active)'}</span>
@@ -173,109 +173,9 @@ export default function ShopPage() {
         </div>
 
         {/* Content Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Desktop Filter Sidebar */}
-          <aside className="hidden lg:block lg:col-span-3 space-y-6 pr-4 border-r border-sasta-border">
-            <div className="flex items-center justify-between pb-3 border-b border-sasta-border">
-              <span className="font-serif font-bold text-sm text-sasta-heading uppercase tracking-wider">
-                Refine Selection
-              </span>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearAllFilters}
-                  className="text-xs text-red-600 hover:underline font-semibold"
-                >
-                  Reset All
-                </button>
-              )}
-            </div>
-
-            {/* Category Filter */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-sasta-heading mb-3">
-                Categories
-              </h4>
-              <div className="space-y-1.5 text-xs">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      if (cat === 'All') setSearchParams({});
-                      else setSearchParams({ category: cat });
-                    }}
-                    className={`w-full text-left py-1.5 px-2 rounded transition-colors flex items-center justify-between ${
-                      selectedCategory === cat
-                        ? 'bg-sasta-yellow-soft font-bold text-sasta-heading'
-                        : 'text-sasta-body hover:bg-sasta-yellow-cream'
-                    }`}
-                  >
-                    <span>{cat}</span>
-                    {selectedCategory === cat && <span className="w-1.5 h-1.5 rounded-full bg-sasta-navy" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Size Filter */}
-            <div className="pt-4 border-t border-sasta-border">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-sasta-heading mb-3">
-                Size
-              </h4>
-              <div className="grid grid-cols-3 gap-1.5">
-                {sizes.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSelectedSize(s)}
-                    className={`py-1.5 text-xs font-semibold rounded border transition-colors ${
-                      selectedSize === s
-                        ? 'bg-sasta-navy text-white border-sasta-navy'
-                        : 'bg-white text-sasta-heading border-sasta-border hover:border-sasta-gold'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Price Range Slider */}
-            <div className="pt-4 border-t border-sasta-border space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-sasta-heading">
-                <span>Max Price</span>
-                <span className="text-sasta-gold-dark font-extrabold text-sm">£{priceRange}.00</span>
-              </div>
-              <input
-                type="range"
-                min="2"
-                max="100"
-                step="1"
-                value={priceRange}
-                onChange={(e) => setPriceRange(Number(e.target.value))}
-                className="w-full accent-sasta-gold cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-sasta-muted">
-                <span>£2.00</span>
-                <span>£100.00</span>
-              </div>
-            </div>
-
-            {/* Availability */}
-            <div className="pt-4 border-t border-sasta-border">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-sasta-heading select-none">
-                <input
-                  type="checkbox"
-                  checked={onlyAvailable}
-                  onChange={(e) => setOnlyAvailable(e.target.checked)}
-                  className="rounded text-sasta-gold focus:ring-sasta-gold"
-                />
-                <span>In Stock Only</span>
-              </label>
-            </div>
-          </aside>
-
+        <div>
           {/* Product Grid Area */}
-          <main className="lg:col-span-9">
+          <main>
             {/* Active filter pills */}
             {hasActiveFilters && (
               <div className="flex flex-wrap items-center gap-2 mb-6 p-3 bg-sasta-yellow-cream/60 rounded-md border border-sasta-border text-xs">
@@ -323,7 +223,7 @@ export default function ShopPage() {
 
             {filteredProducts.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
                   {paginatedProducts.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
@@ -350,62 +250,85 @@ export default function ShopPage() {
         </div>
       </div>
 
-      {/* Mobile Filter Drawer */}
+      {/* Slide-over Filter Drawer (same style as CartDrawer) */}
       {mobileFilterOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
+        <div className="fixed inset-0 z-50 flex justify-end">
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-fade-in"
             onClick={() => setMobileFilterOpen(false)}
           />
-          <div className="relative w-full max-w-xs bg-white h-full shadow-2xl p-5 flex flex-col z-10 overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-sasta-border mb-4">
-              <h3 className="font-serif font-bold text-base text-sasta-heading">
-                Filter Products
-              </h3>
-              <button
-                onClick={() => setMobileFilterOpen(false)}
-                className="p-1 text-sasta-muted hover:text-sasta-heading"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <div className="relative w-full max-w-md bg-white h-full shadow-drawer flex flex-col z-10">
+            <div className="p-5 border-b border-sasta-border flex items-center justify-between bg-sasta-yellow-cream/60">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-sasta-gold-dark" />
+                <h3 className="font-serif font-bold text-lg text-sasta-heading">
+                  Refine Selection
+                </h3>
+              </div>
+              <div className="flex items-center gap-3">
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="text-xs text-red-600 hover:underline font-semibold"
+                  >
+                    Reset All
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setMobileFilterOpen(false)}
+                  className="p-1.5 text-sasta-muted hover:text-sasta-heading hover:bg-black/5 rounded-full transition-colors"
+                  aria-label="Close filters"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Mobile Filters Content */}
-            <div className="space-y-6 flex-1">
+            {/* Filters Content */}
+            <div className="p-5 space-y-6 flex-1 overflow-y-auto">
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-sasta-heading mb-2">
-                  Category
+                <h4 className="text-xs font-bold uppercase tracking-wider text-sasta-heading mb-3">
+                  Categories
                 </h4>
-                <div className="space-y-1 text-xs">
+                <div className="space-y-1.5 text-xs">
                   {categories.map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`w-full text-left py-1.5 px-2 rounded ${
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat);
+                        if (cat === 'All') setSearchParams({});
+                        else setSearchParams({ category: cat });
+                      }}
+                      className={`w-full text-left py-2 px-3 rounded-md transition-colors flex items-center justify-between ${
                         selectedCategory === cat
-                          ? 'bg-sasta-yellow-soft font-bold'
-                          : 'text-sasta-body'
+                          ? 'bg-sasta-yellow-soft font-bold text-sasta-heading'
+                          : 'text-sasta-body hover:bg-sasta-yellow-cream'
                       }`}
                     >
-                      {cat}
+                      <span>{cat}</span>
+                      {selectedCategory === cat && <span className="w-1.5 h-1.5 rounded-full bg-sasta-navy" />}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="pt-4 border-t border-sasta-border">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-sasta-heading mb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-sasta-heading mb-3">
                   Size
                 </h4>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-3 gap-2">
                   {sizes.map((s) => (
                     <button
                       key={s}
+                      type="button"
                       onClick={() => setSelectedSize(s)}
-                      className={`py-1 text-xs font-semibold rounded border ${
+                      className={`py-2 text-xs font-semibold rounded border transition-colors ${
                         selectedSize === s
-                          ? 'bg-sasta-navy text-white'
-                          : 'border-sasta-border'
+                          ? 'bg-sasta-navy text-white border-sasta-navy'
+                          : 'bg-white text-sasta-heading border-sasta-border hover:border-sasta-gold'
                       }`}
                     >
                       {s}
@@ -414,39 +337,46 @@ export default function ShopPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-sasta-border">
-                <div className="flex justify-between text-xs font-bold mb-2">
+              <div className="pt-4 border-t border-sasta-border space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-sasta-heading">
                   <span>Max Price</span>
-                  <span>£{priceRange}.00</span>
+                  <span className="text-sasta-gold-dark font-extrabold text-sm">£{priceRange}.00</span>
                 </div>
                 <input
                   type="range"
                   min="2"
                   max="100"
+                  step="1"
                   value={priceRange}
                   onChange={(e) => setPriceRange(Number(e.target.value))}
-                  className="w-full accent-sasta-gold"
+                  className="w-full accent-sasta-gold cursor-pointer"
                 />
+                <div className="flex justify-between text-[10px] text-sasta-muted">
+                  <span>£2.00</span>
+                  <span>£100.00</span>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-sasta-border">
-                <label className="flex items-center gap-2 text-xs font-medium">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-sasta-heading select-none">
                   <input
                     type="checkbox"
                     checked={onlyAvailable}
                     onChange={(e) => setOnlyAvailable(e.target.checked)}
+                    className="rounded text-sasta-gold focus:ring-sasta-gold"
                   />
                   <span>In Stock Only</span>
                 </label>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-sasta-border mt-auto">
+            <div className="p-5 border-t border-sasta-border bg-sasta-yellow-cream/40 mt-auto">
               <button
+                type="button"
                 onClick={() => setMobileFilterOpen(false)}
-                className="w-full bg-sasta-gold text-sasta-heading font-bold text-xs uppercase py-3 rounded shadow-xs"
+                className="w-full bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading font-bold text-xs uppercase tracking-wider py-3.5 rounded shadow-sm transition-colors"
               >
-                Apply Filters ({filteredProducts.length} Results)
+                Show {filteredProducts.length} Results
               </button>
             </div>
           </div>

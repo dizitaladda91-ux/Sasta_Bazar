@@ -75,6 +75,53 @@ export const KIDS_MENU_GROUPS = [
   'KIDS OCCASIONS'
 ];
 
+export const HIJAB_MENU_GROUPS = [
+  'HIJAB BY FABRIC & STYLE'
+];
+
+export const HIJAB_MENU_CATEGORIES = [
+  {
+    name: "All Women's Hijab",
+    slug: 'womens-hijab-all',
+    path: '/womens-hijab',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/01_-_Light_Grey_4373ac79-46cb-446b-9110-f1f7e79839c2.jpg?v=1791976860',
+    badge: null,
+    group: 'HIJAB BY FABRIC & STYLE'
+  },
+  {
+    name: 'Double Stitched',
+    slug: 'hijab-double-stitched',
+    path: '/womens-hijab/double-stitched',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/01_-_Light_Grey_4373ac79-46cb-446b-9110-f1f7e79839c2.jpg?v=1791976860',
+    badge: null,
+    group: 'HIJAB BY FABRIC & STYLE'
+  },
+  {
+    name: 'Linen',
+    slug: 'hijab-linen',
+    path: '/womens-hijab/linen',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/01_-_Light_Grey_4373ac79-46cb-446b-9110-f1f7e79839c2.jpg?v=1791976860',
+    badge: null,
+    group: 'HIJAB BY FABRIC & STYLE'
+  },
+  {
+    name: 'Jersey',
+    slug: 'hijab-jersey',
+    path: '/womens-hijab/jersey',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/01_-_Light_Grey_4373ac79-46cb-446b-9110-f1f7e79839c2.jpg?v=1791976860',
+    badge: null,
+    group: 'HIJAB BY FABRIC & STYLE'
+  },
+  {
+    name: 'Cotton Silk',
+    slug: 'hijab-cotton-silk',
+    path: '/womens-hijab/cotton-silk',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/01_-_Light_Grey_4373ac79-46cb-446b-9110-f1f7e79839c2.jpg?v=1791976860',
+    badge: null,
+    group: 'HIJAB BY FABRIC & STYLE'
+  }
+];
+
 export const MEGA_MENU_GROUPS = [
   'SHOP BY STYLE',
   'OCCASION WEAR',

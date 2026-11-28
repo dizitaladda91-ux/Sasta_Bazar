@@ -63,7 +63,7 @@ function MainLayout() {
 
   if (pathname === '/') page = <HomePage />;
   else if (pathname === '/shop') page = <ShopPage />;
-  else if (pathname === '/womens-hijab') page = <WomensHijabPage />;
+  else if (pathname === '/womens-hijab' || (segments[0] === 'womens-hijab' && segments[1])) page = <WomensHijabPage />;
   else if (segments[0] === 'collection' && segments[1]) page = <CollectionPage />;
   else if (segments[0] === 'product' && segments[1]) page = <ProductDetailPage />;
   else if (pathname === '/cart') page = <CartPage />;

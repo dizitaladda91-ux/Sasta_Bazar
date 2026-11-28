@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
 import Pagination from '../components/common/Pagination';
@@ -9,66 +9,70 @@ export const HIJAB_CATEGORIES = [
   {
     id: 'all',
     label: 'All Hijabs',
+    title: "Women's Hijab",
+    path: '/womens-hijab',
     description: 'Explore our complete collection of everyday luxury hijabs crafted for breathable comfort.',
     keywords: []
   },
   {
     id: 'double-stitched',
     label: 'Double Stitched',
+    title: 'Double Stitched Hijabs',
+    path: '/womens-hijab/double-stitched',
     description: 'Durable, neat double-stitched hijabs designed for a clean everyday drape.',
     keywords: ['double stitched', 'double-stitched']
   },
   {
     id: 'linen',
     label: 'Linen',
+    title: 'Linen Hijabs',
+    path: '/womens-hijab/linen',
     description: 'Lightweight, airy linen hijabs ideal for warm weather and effortless styling.',
     keywords: ['linen']
   },
   {
     id: 'jersey',
     label: 'Jersey',
+    title: 'Jersey Hijabs',
+    path: '/womens-hijab/jersey',
     description: 'Ultra-soft, stretchable jersey hijabs that stay comfortably in place all day.',
     keywords: ['jersey']
   },
   {
     id: 'cotton-silk',
     label: 'Cotton Silk',
+    title: 'Cotton Silk Hijabs',
+    path: '/womens-hijab/cotton-silk',
     description: 'Smooth cotton silk hijabs with a subtle sheen for festive and formal occasions.',
     keywords: ['cotton silk', 'cotton-silk', 'silk']
   }
 ];
 
 export default function WomensHijabPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialCategory = searchParams.get('category') || 'all';
-  const [selectedCategory, setSelectedCategory] = useState(
-    HIJAB_CATEGORIES.some((cat) => cat.id === initialCategory) ? initialCategory : 'all'
-  );
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const pathSegment = location.pathname.replace(/\/+$/, '').split('/')[2] || '';
+  const queryCategory = searchParams.get('category') || '';
+  const resolvedCategory = pathSegment || queryCategory || 'all';
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 24;
 
   const { products: allHijabProducts, loading } = useProducts({ collection: 'scarves', limit: 250 });
 
-  useEffect(() => {
-    const param = searchParams.get('category') || 'all';
-    if (HIJAB_CATEGORIES.some((cat) => cat.id === param)) {
-      setSelectedCategory(param);
-    }
-  }, [searchParams]);
+  const activeCategory = useMemo(
+    () => HIJAB_CATEGORIES.find((cat) => cat.id === resolvedCategory) || HIJAB_CATEGORIES[0],
+    [resolvedCategory]
+  );
 
   useEffect(() => {
-    document.title = "Women's Hijab | SASTA BAZAAR - Everyday Luxury";
+    document.title = `${activeCategory.title} | SASTA BAZAAR - Everyday Luxury`;
     window.scrollTo(0, 0);
-  }, []);
+  }, [activeCategory.title]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategory]);
-
-  const activeCategory = useMemo(
-    () => HIJAB_CATEGORIES.find((cat) => cat.id === selectedCategory) || HIJAB_CATEGORIES[0],
-    [selectedCategory]
-  );
+  }, [activeCategory.id]);
 
   const filteredProducts = useMemo(() => {
     if (activeCategory.id === 'all') return allHijabProducts;
@@ -84,13 +88,8 @@ export default function WomensHijabPage() {
     return filteredProducts.slice(start, start + PAGE_SIZE);
   }, [filteredProducts, currentPage]);
 
-  const handleSelectCategory = (id) => {
-    setSelectedCategory(id);
-    if (id === 'all') {
-      setSearchParams({});
-    } else {
-      setSearchParams({ category: id });
-    }
+  const handleSelectCategory = (cat) => {
+    navigate(cat.path);
   };
 
   return (
@@ -100,7 +99,15 @@ export default function WomensHijabPage() {
         <nav className="flex items-center gap-2 text-xs text-sasta-muted mb-6" aria-label="Breadcrumb">
           <Link to="/" className="hover:text-sasta-heading">Home</Link>
           <ChevronRight className="w-3.5 h-3.5" />
-          <span className="font-semibold text-sasta-heading">Women&apos;s Hijab</span>
+          {activeCategory.id === 'all' ? (
+            <span className="font-semibold text-sasta-heading">Women&apos;s Hijab</span>
+          ) : (
+            <>
+              <Link to="/womens-hijab" className="hover:text-sasta-heading">Women&apos;s Hijab</Link>
+              <ChevronRight className="w-3.5 h-3.5" />
+              <span className="font-semibold text-sasta-heading">{activeCategory.label}</span>
+            </>
+          )}
         </nav>
 
         {/* Page Banner */}
@@ -109,7 +116,7 @@ export default function WomensHijabPage() {
             Everyday Luxury
           </span>
           <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-sasta-heading mb-3">
-            Women&apos;s Hijab
+            {activeCategory.title}
           </h1>
           <p className="text-xs sm:text-sm text-sasta-body max-w-2xl mx-auto leading-relaxed mb-4">
             {activeCategory.description}
@@ -126,12 +133,12 @@ export default function WomensHijabPage() {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
             {HIJAB_CATEGORIES.map((category) => {
-              const isActive = selectedCategory === category.id;
+              const isActive = activeCategory.id === category.id;
               return (
                 <button
                   key={category.id}
                   type="button"
-                  onClick={() => handleSelectCategory(category.id)}
+                  onClick={() => handleSelectCategory(category)}
                   className={`rounded-full px-5 py-2 text-xs font-semibold tracking-wide transition-all border ${
                     isActive
                       ? 'bg-[#B8862B] text-white border-[#B8862B] shadow-sm'
@@ -170,7 +177,7 @@ export default function WomensHijabPage() {
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
-                onClick={() => handleSelectCategory('all')}
+                onClick={() => handleSelectCategory(HIJAB_CATEGORIES[0])}
                 className="inline-flex items-center gap-2 bg-sasta-gold hover:bg-sasta-gold-hover text-sasta-heading text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded shadow-xs"
               >
                 View All Hijabs

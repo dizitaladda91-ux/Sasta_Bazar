@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
+  HIJAB_MENU_CATEGORIES,
+  HIJAB_MENU_GROUPS,
   KIDS_MENU_CATEGORIES,
   KIDS_MENU_GROUPS,
   MEGA_MENU_CATEGORIES,
@@ -10,17 +12,24 @@ import {
 const FALLBACK_IMAGE = '/hero-collection-1.png';
 
 export default function MegaMenu({
-  activeMenu, // 'womens' | 'kids' | null
+  activeMenu, // 'womens' | 'kids' | 'hijab' | null
   pathname,
   onClose,
   onMouseEnter,
   onMouseLeave
 }) {
   const isKids = activeMenu === 'kids';
-  const groups = isKids ? KIDS_MENU_GROUPS : WOMENS_MENU_GROUPS;
+  const isHijab = activeMenu === 'hijab';
+  const groups = isKids
+    ? KIDS_MENU_GROUPS
+    : isHijab
+      ? HIJAB_MENU_GROUPS
+      : WOMENS_MENU_GROUPS;
   const categories = isKids
     ? KIDS_MENU_CATEGORIES
-    : MEGA_MENU_CATEGORIES.filter((item) => item.group !== 'FOR KIDS');
+    : isHijab
+      ? HIJAB_MENU_CATEGORIES
+      : MEGA_MENU_CATEGORIES.filter((item) => item.group !== 'FOR KIDS');
 
   if (!activeMenu) return null;
 
@@ -37,18 +46,24 @@ export default function MegaMenu({
 
       {/* Compact Glassmorphic Luxury Mega Menu */}
       <div
-        id={isKids ? 'kids-collection-menu' : 'womens-collection-menu'}
+        id={isKids ? 'kids-collection-menu' : isHijab ? 'womens-hijab-menu' : 'womens-collection-menu'}
         role="region"
-        aria-label={isKids ? "Kids Collection Mega Menu" : "Women's Collection Mega Menu"}
+        aria-label={
+          isKids
+            ? 'Kids Collection Mega Menu'
+            : isHijab
+              ? "Women's Hijab Mega Menu"
+              : "Women's Collection Mega Menu"
+        }
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         className={`animate-mega-menu fixed left-1/2 top-[76px] sm:top-[84px] z-40 ${
-          isKids ? 'w-[min(92vw,560px)]' : 'w-[min(94vw,680px)]'
+          isHijab ? 'w-[min(92vw,420px)]' : isKids ? 'w-[min(92vw,560px)]' : 'w-[min(94vw,680px)]'
         } max-h-[calc(100vh-100px)] overflow-y-auto rounded-2xl border border-[#B8862B]/30 bg-[rgba(255,252,245,0.95)] p-6 shadow-[0_24px_60px_rgba(48,39,25,0.18)] backdrop-blur-md`}
       >
         <nav
-          aria-label={isKids ? 'Kids categories' : "Women's categories"}
-          className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5"
+          aria-label={isKids ? 'Kids categories' : isHijab ? 'Hijab categories' : "Women's categories"}
+          className={`grid grid-cols-1 ${isHijab ? '' : 'sm:grid-cols-2'} gap-x-6 gap-y-5`}
         >
           {groups.map((groupName) => {
             const items = categories.filter((cat) => cat.group === groupName);

@@ -147,16 +147,26 @@ export default function Header() {
                   <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${activeMegaMenu === 'kids' ? 'rotate-180' : ''}`} />
                 </button>
               </li>
-              <li>
-                <Link
-                  to="/womens-hijab"
-                  aria-current={location.pathname === '/womens-hijab' ? 'page' : undefined}
-                  className={`whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#B8862B] ${
-                    location.pathname === '/womens-hijab' ? 'text-[#B8862B]' : 'text-[#34312e]'
+              <li
+                className="relative"
+                onMouseEnter={() => openMenu('hijab')}
+                onMouseLeave={scheduleCloseMenu}
+              >
+                <button
+                  type="button"
+                  aria-expanded={activeMegaMenu === 'hijab'}
+                  aria-controls="womens-hijab-menu"
+                  aria-haspopup="true"
+                  onClick={() => setActiveMegaMenu((curr) => (curr === 'hijab' ? null : 'hijab'))}
+                  className={`flex items-center gap-1.5 whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#B8862B] ${
+                    activeMegaMenu === 'hijab' || location.pathname.startsWith('/womens-hijab')
+                      ? 'text-[#B8862B]'
+                      : 'text-[#34312e]'
                   }`}
                 >
                   Women&apos;s Hijab
-                </Link>
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${activeMegaMenu === 'hijab' ? 'rotate-180' : ''}`} />
+                </button>
               </li>
               <li>
                 <Link

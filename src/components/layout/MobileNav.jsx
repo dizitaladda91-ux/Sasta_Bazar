@@ -5,6 +5,8 @@ import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import {
+  HIJAB_MENU_CATEGORIES,
+  HIJAB_MENU_GROUPS,
   KIDS_MENU_CATEGORIES,
   KIDS_MENU_GROUPS,
   MEGA_MENU_CATEGORIES,
@@ -185,15 +187,44 @@ export default function MobileNav({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* Women's Hijab */}
+          {/* Women's Hijab Accordion */}
           <div className="px-4 py-2">
-            <Link
-              to="/womens-hijab"
-              onClick={handleLinkClick}
-              className="block text-sm font-semibold uppercase tracking-wider text-sasta-heading hover:text-sasta-gold-dark py-1"
+            <button
+              onClick={() => toggleSection('hijab')}
+              className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-sasta-heading py-2"
             >
-              Women&apos;s Hijab
-            </Link>
+              <span>Women&apos;s Hijab</span>
+              {openSections.hijab ? (
+                <ChevronDown className="w-4 h-4 text-sasta-muted" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-sasta-muted" />
+              )}
+            </button>
+
+            {openSections.hijab && (
+              <div className="mt-1 space-y-3 pb-3 pt-1 animate-fade-in">
+                {HIJAB_MENU_GROUPS.map((groupName) => {
+                  const items = HIJAB_MENU_CATEGORIES.filter((c) => c.group === groupName);
+                  return (
+                    <div key={groupName} className="space-y-1">
+                      <p className="px-1 font-serif text-[10px] font-bold uppercase tracking-[0.18em] text-[#B8862B]">
+                        {groupName}
+                      </p>
+                      {items.map((category) => (
+                        <Link
+                          key={category.slug}
+                          to={category.path}
+                          onClick={handleLinkClick}
+                          className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-xs text-sasta-heading hover:bg-[#F6ECD9]/70 transition-colors"
+                        >
+                          <span className="flex-1 truncate font-medium">{category.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Main pages */}

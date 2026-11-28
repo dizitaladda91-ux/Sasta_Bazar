@@ -149,6 +149,17 @@ export default function Header() {
               </li>
               <li>
                 <Link
+                  to="/womens-hijab"
+                  aria-current={location.pathname === '/womens-hijab' ? 'page' : undefined}
+                  className={`whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#B8862B] ${
+                    location.pathname === '/womens-hijab' ? 'text-[#B8862B]' : 'text-[#34312e]'
+                  }`}
+                >
+                  Women&apos;s Hijab
+                </Link>
+              </li>
+              <li>
+                <Link
                   to="/about"
                   aria-current={location.pathname === '/about' ? 'page' : undefined}
                   className={`whitespace-nowrap py-3 text-xs font-semibold tracking-wide transition-colors hover:text-[#8d6b36] ${

@@ -14,6 +14,7 @@ import CartDrawer from './components/layout/CartDrawer';
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
 import CollectionPage from './pages/CollectionPage';
+import WomensHijabPage from './pages/WomensHijabPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import CartPage from './pages/CartPage';
 import WishlistPage from './pages/WishlistPage';
@@ -62,6 +63,7 @@ function MainLayout() {
 
   if (pathname === '/') page = <HomePage />;
   else if (pathname === '/shop') page = <ShopPage />;
+  else if (pathname === '/womens-hijab') page = <WomensHijabPage />;
   else if (segments[0] === 'collection' && segments[1]) page = <CollectionPage />;
   else if (segments[0] === 'product' && segments[1]) page = <ProductDetailPage />;
   else if (pathname === '/cart') page = <CartPage />;

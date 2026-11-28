@@ -84,44 +84,54 @@ export const MEGA_MENU_GROUPS = [
 
 export const KIDS_MENU_CATEGORIES = [
   {
-    name: 'All Kids Collection',
+    name: 'All kids collection',
     slug: 'kids-all',
     path: '/collection/kids-collection',
     image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/81c960b0-5c23-4f4c-bd88-2b25f5b5a124.jpg?v=1782834977',
-    badge: 'Popular',
+    badge: null,
     group: 'KIDS ETHNIC WEAR',
-    featuredTitle: 'Kids Festive Edit — Up to 50% Off',
+    featuredTitle: 'All Kids Collection',
     featuredSubtitle: 'Soft cotton-lined lehengas, shararas, and festive kurta sets for kids.'
   },
   {
-    name: 'Kids Lehenga Choli',
-    slug: 'kids-lehenga',
-    path: '/collection/kids-collection',
-    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/81c960b0-5c23-4f4c-bd88-2b25f5b5a124.jpg?v=1782834977',
-    badge: 'Trending',
-    group: 'KIDS ETHNIC WEAR',
-    featuredTitle: 'Kids Embroidered Lehengas',
-    featuredSubtitle: 'Lightweight net & silk lehengas designed for comfortable twirls.'
-  },
-  {
-    name: 'Kids Sharara & Suit Sets',
+    name: 'Sharara',
     slug: 'kids-sharara',
-    path: '/collection/kids-collection',
+    path: '/collection/kids-collection?style=sharara',
     image: '/hero-collection-3.png',
-    badge: 'New',
-    group: 'KIDS OCCASIONS',
-    featuredTitle: 'Kids Eid & Wedding Suits',
+    badge: null,
+    group: 'KIDS ETHNIC WEAR',
+    featuredTitle: 'Kids Sharara Sets',
     featuredSubtitle: 'Breathable festive shararas and kurta sets for family celebrations.'
   },
   {
-    name: 'Shop All Kids Wear',
-    slug: 'kids-shop',
-    path: '/shop?category=Kids+Collection',
+    name: 'Salwar Suit',
+    slug: 'kids-salwar-suit',
+    path: '/collection/kids-collection?style=salwar-suit',
     image: '/hero-collection-3.png',
     badge: null,
+    group: 'KIDS ETHNIC WEAR',
+    featuredTitle: 'Kids Salwar Suits',
+    featuredSubtitle: 'Comfortable Patiala and classic salwar suits for kids.'
+  },
+  {
+    name: 'Dresses',
+    slug: 'kids-dresses',
+    path: '/collection/kids-collection?style=dresses',
+    image: '/hero-collection-2.png',
+    badge: null,
     group: 'KIDS OCCASIONS',
-    featuredTitle: 'Budget Kids Festive Wear',
-    featuredSubtitle: 'Filter all kids ethnic outfits by size, colour, and price.'
+    featuredTitle: 'Kids Festive Dresses',
+    featuredSubtitle: 'Graceful ethnic dresses and gowns for celebrations.'
+  },
+  {
+    name: 'Lehnga',
+    slug: 'kids-lehenga',
+    path: '/collection/kids-collection?style=lehenga',
+    image: 'https://cdn.shopify.com/s/files/1/1083/5361/8269/files/81c960b0-5c23-4f4c-bd88-2b25f5b5a124.jpg?v=1782834977',
+    badge: null,
+    group: 'KIDS OCCASIONS',
+    featuredTitle: 'Kids Lehnga Choli',
+    featuredSubtitle: 'Lightweight net & silk lehengas designed for comfortable twirls.'
   }
 ];
 

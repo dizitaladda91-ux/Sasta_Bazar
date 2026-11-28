@@ -1,23 +1,64 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
 import ProductCard from '../components/common/ProductCard';
 import Pagination from '../components/common/Pagination';
 import { useProducts } from '../hooks/useProducts';
 import { useStorefrontContent } from '../hooks/useStorefrontContent';
 
+const KIDS_STYLE_FILTERS = {
+  sharara: {
+    label: 'Kids Sharara',
+    description: 'Festive kids sharara sets crafted with soft cotton linings and delicate embroidery.',
+    keywords: ['sharara', 'gharara']
+  },
+  'salwar-suit': {
+    label: 'Kids Salwar Suit',
+    description: 'Comfortable Patiala and classic salwar suits tailored for kids.',
+    keywords: ['salwar', 'patiala', 'suit']
+  },
+  dresses: {
+    label: 'Kids Dresses',
+    description: 'Graceful ethnic dresses, frocks, and gowns for little ones.',
+    keywords: ['dress', 'gown', 'frock', 'anarkali']
+  },
+  lehenga: {
+    label: 'Kids Lehnga',
+    description: 'Lightweight embroidered lehenga choli sets made for festive twirls.',
+    keywords: ['lehenga', 'lehnga', 'chaniya']
+  }
+};
+
 export default function CollectionPage() {
   const { slug } = useParams();
+  const [searchParams] = useSearchParams();
+  const styleParam = (searchParams.get('style') || '').toLowerCase();
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 24;
 
   const { content: collectionPages } = useStorefrontContent('collection_pages');
-  const collectionInfo = collectionPages?.[slug];
-  const { products } = useProducts({ collection: slug, limit: 250 });
+  const baseCollectionInfo = collectionPages?.[slug];
+  const styleMeta = slug === 'kids-collection' ? KIDS_STYLE_FILTERS[styleParam] : null;
+  const collectionInfo = styleMeta
+    ? {
+        title: styleMeta.label,
+        description: styleMeta.description
+      }
+    : baseCollectionInfo;
+
+  const { products: rawProducts } = useProducts({ collection: slug, limit: 250 });
+
+  const products = useMemo(() => {
+    if (!styleMeta) return rawProducts;
+    return rawProducts.filter((product) => {
+      const haystack = `${product.title || ''} ${product.subcategory || ''} ${product.description || ''}`.toLowerCase();
+      return styleMeta.keywords.some((kw) => haystack.includes(kw));
+    });
+  }, [rawProducts, styleMeta]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [slug]);
+  }, [slug, styleParam]);
 
   const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
   const paginatedProducts = useMemo(() => {

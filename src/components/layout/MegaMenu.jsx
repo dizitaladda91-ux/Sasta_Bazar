@@ -81,14 +81,12 @@ export default function MegaMenu({
                             isCurrent ? 'bg-[#F6ECD9]/60' : ''
                           }`}
                         >
-                          {!isKids && (
-                            <img
-                              src={item.image || FALLBACK_IMAGE}
-                              alt=""
-                              loading="lazy"
-                              className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-[#B8862B]/30 bg-[#F6ECD9]"
-                            />
-                          )}
+                          <img
+                            src={item.image || FALLBACK_IMAGE}
+                            alt=""
+                            loading="lazy"
+                            className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-[#B8862B]/30 bg-[#F6ECD9]"
+                          />
                           <span
                             className={`truncate text-xs font-medium transition-colors ${
                               isCurrent ? 'font-semibold text-[#B8862B]' : 'text-[#2B2318] group-hover:text-[#1F1F1F]'

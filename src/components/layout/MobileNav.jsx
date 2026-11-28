@@ -185,6 +185,17 @@ export default function MobileNav({ isOpen, onClose }) {
             )}
           </div>
 
+          {/* Women's Hijab */}
+          <div className="px-4 py-2">
+            <Link
+              to="/womens-hijab"
+              onClick={handleLinkClick}
+              className="block text-sm font-semibold uppercase tracking-wider text-sasta-heading hover:text-sasta-gold-dark py-1"
+            >
+              Women&apos;s Hijab
+            </Link>
+          </div>
+
           {/* Main pages */}
           <div className="px-4 py-2">
             <Link
